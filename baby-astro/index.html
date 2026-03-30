@@ -1163,6 +1163,24 @@
                     drawUnknownBarrier(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50);
                     break;
                 }
+
+                // Gap edge glow for visibility on all zones
+                ctx.shadowColor = 'rgba(255,255,255,0.6)';
+                ctx.shadowBlur = 8;
+                ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+                ctx.lineWidth = 2;
+                // Top obstacle bottom edge
+                ctx.beginPath();
+                ctx.moveTo(ox - 2, obstacle.topY);
+                ctx.lineTo(ox + ow + 2, obstacle.topY);
+                ctx.stroke();
+                // Bottom obstacle top edge
+                ctx.beginPath();
+                ctx.moveTo(ox - 2, obstacle.bottomY);
+                ctx.lineTo(ox + ow + 2, obstacle.bottomY);
+                ctx.stroke();
+                ctx.shadowColor = 'transparent';
+                ctx.shadowBlur = 0;
             }
         }
 
@@ -1170,15 +1188,21 @@
 
         function drawCloudFormation(x, y, w, h, seed) {
             if (h < 5) return;
-            // Layered puffy clouds
-            const cloudColors = ['rgba(230,240,250,0.9)', 'rgba(210,225,240,0.8)', 'rgba(240,245,255,0.7)'];
+            // Solid cloud base - opaque so it's clearly visible
+            const cloudColors = ['rgba(180,200,220,0.95)', 'rgba(160,185,210,0.9)', 'rgba(200,215,230,0.85)'];
             const cx = x + w / 2;
-            // Fill base
-            ctx.fillStyle = 'rgba(220,235,250,0.6)';
+            // Fill base solid
+            ctx.fillStyle = 'rgba(170,190,210,0.85)';
             ctx.fillRect(x, y, w, h);
-            // Cloud puffs along the gap edge
+            // Darker edge shadow along the gap side
             const edgeY = (y === 0) ? y + h : y;
             const dir = (y === 0) ? 1 : -1;
+            const shadowGrad = ctx.createLinearGradient(x, edgeY - dir * 20, x, edgeY);
+            shadowGrad.addColorStop(0, 'rgba(100,120,150,0.0)');
+            shadowGrad.addColorStop(1, 'rgba(100,120,150,0.5)');
+            ctx.fillStyle = shadowGrad;
+            ctx.fillRect(x, Math.min(edgeY - dir * 20, edgeY), w, 20);
+            // Cloud puffs along the gap edge
             for (let i = 0; i < 6; i++) {
                 const px = x - 8 + seededRand(seed, i) * (w + 16);
                 const py = edgeY - dir * (seededRand(seed, i + 10) * 12);
@@ -1193,7 +1217,7 @@
                 const px = x + seededRand(seed, i + 30) * w;
                 const py = edgeY - dir * (15 + seededRand(seed, i + 40) * 20);
                 const r = 8 + seededRand(seed, i + 50) * 12;
-                ctx.fillStyle = 'rgba(245,248,255,0.5)';
+                ctx.fillStyle = 'rgba(200,215,230,0.6)';
                 ctx.beginPath();
                 ctx.arc(px, py, r, 0, Math.PI * 2);
                 ctx.fill();
