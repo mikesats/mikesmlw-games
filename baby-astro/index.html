@@ -1,0 +1,1918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>The Adventures of Baby Astro!</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Cinzel:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        body {
+            width: 100%;
+            height: 100%;
+            position: fixed;
+            overflow: hidden;
+            background: #000;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        #gameContainer {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+            max-width: 100vw;
+            max-height: 100vh;
+            background: #000;
+        }
+
+        #debugInfo {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: #0f0;
+            font-family: monospace;
+            font-size: 12px;
+            display: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <script>
+        // Game constants and state
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Set canvas size - portrait orientation
+        function resizeCanvas() {
+            const maxWidth = window.innerWidth;
+            const maxHeight = window.innerHeight;
+            const aspectRatio = 9 / 16; // Portrait
+
+            if (maxWidth / maxHeight > aspectRatio) {
+                canvas.height = maxHeight;
+                canvas.width = maxHeight * aspectRatio;
+            } else {
+                canvas.width = maxWidth;
+                canvas.height = maxWidth / aspectRatio;
+            }
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Game states
+        const GAME_STATE = {
+            MENU: 'menu',
+            PLAYING: 'playing',
+            DEAD: 'dead'
+        };
+
+        // Zone definitions
+        const ZONES = [
+            {
+                name: 'Earth Atmosphere',
+                depthRange: [0, 8],
+                gravity: 0.28,
+                gapSize: 200,
+                obstacleSpeed: 1.8,
+                obstacleSpacing: 250,
+                bgColor1: '#87CEEB',
+                bgColor2: '#E0F6FF',
+                obstacleColor: '#FFFFFF',
+                obstacleType: 'cloud'
+            },
+            {
+                name: 'Low Earth Orbit',
+                depthRange: [9, 18],
+                gravity: 0.28,
+                gapSize: 185,
+                obstacleSpeed: 2.1,
+                obstacleSpacing: 235,
+                bgColor1: '#001a4d',
+                bgColor2: '#0033cc',
+                obstacleColor: '#C0C0C0',
+                obstacleType: 'satellite'
+            },
+            {
+                name: 'The Moon',
+                depthRange: [19, 28],
+                gravity: 0.18,
+                gapSize: 175,
+                obstacleSpeed: 2.3,
+                obstacleSpacing: 220,
+                bgColor1: '#1a1a1a',
+                bgColor2: '#404040',
+                obstacleColor: '#808080',
+                obstacleType: 'crater'
+            },
+            {
+                name: 'Mars Corridor',
+                depthRange: [29, 40],
+                gravity: 0.33,
+                gapSize: 155,
+                obstacleSpeed: 2.7,
+                obstacleSpacing: 200,
+                bgColor1: '#8B4513',
+                bgColor2: '#D2691E',
+                obstacleColor: '#CD5C5C',
+                obstacleType: 'canyon'
+            },
+            {
+                name: 'Asteroid Belt',
+                depthRange: [41, 55],
+                gravity: 0.30,
+                gapSize: 138,
+                obstacleSpeed: 3.4,
+                obstacleSpacing: 180,
+                bgColor1: '#0a0a0a',
+                bgColor2: '#1a1a1a',
+                obstacleColor: '#696969',
+                obstacleType: 'asteroid'
+            },
+            {
+                name: 'Jupiter',
+                depthRange: [56, 70],
+                gravity: 0.48,
+                gapSize: 148,
+                obstacleSpeed: 3.1,
+                obstacleSpacing: 185,
+                bgColor1: '#663300',
+                bgColor2: '#FF8C00',
+                obstacleColor: '#8B4513',
+                obstacleType: 'gas'
+            },
+            {
+                name: 'Saturn Rings',
+                depthRange: [71, 85],
+                gravity: 0.26,
+                gapSize: 132,
+                obstacleSpeed: 3.6,
+                obstacleSpacing: 170,
+                bgColor1: '#1a1a00',
+                bgColor2: '#DAA520',
+                obstacleColor: '#B8860B',
+                obstacleType: 'ring'
+            },
+            {
+                name: 'Deep Space',
+                depthRange: [86, 99],
+                gravity: 0.20,
+                gapSize: 125,
+                obstacleSpeed: 3.9,
+                obstacleSpacing: 160,
+                bgColor1: '#000000',
+                bgColor2: '#0a0a1a',
+                obstacleColor: '#1a1a2e',
+                obstacleType: 'void'
+            },
+            {
+                name: 'The Unknown',
+                depthRange: [100, Infinity],
+                gravity: 0.22,
+                gapSize: 118,
+                obstacleSpeed: 4.0,
+                obstacleSpacing: 155,
+                bgColor1: '#000000',
+                bgColor2: '#0a0a1a',
+                obstacleColor: '#2a1a3a',
+                obstacleType: 'unknown'
+            }
+        ];
+
+        // Game state variables
+        let gameState = GAME_STATE.MENU;
+        let depth = 0;
+        let bestDepth = localStorage.getItem('deepSpaceBestDepth') || 0;
+
+        // Player object
+        const player = {
+            x: canvas.width * 0.25,
+            y: canvas.height / 2,
+            width: 28,
+            height: 44,
+            velocityY: 0,
+            boostActive: false,
+            rotation: 0,
+            jetFlameLife: 0,
+            animTime: 0
+        };
+
+        let obstacles = [];
+        let particles = [];
+
+        // Zone tracking
+        let currentZone = ZONES[0];
+        let lastZoneAnnounceTime = 0;
+        let zoneAnnounceText = '';
+
+        // Death animation
+        let deathTime = 0;
+        let deathScreenCountStart = 0;
+
+        // Menu animation
+        let menuTime = 0;
+
+        // Input handling
+        let inputActive = false;
+
+        function getZoneForDepth(d) {
+            return ZONES.find(z => d >= z.depthRange[0] && d <= z.depthRange[1]);
+        }
+
+        function handleInput() {
+            inputActive = true;
+        }
+
+        function resetInput() {
+            inputActive = false;
+        }
+
+        // Event listeners
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                handleInput();
+            }
+        });
+
+        document.addEventListener('click', handleInput);
+        document.addEventListener('mouseup', resetInput);
+        document.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleInput();
+        }, { passive: false });
+        document.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            resetInput();
+        }, { passive: false });
+
+        // Web Audio API for sound
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSound(frequency, duration, type = 'sine') {
+            try {
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+                osc.type = type;
+                osc.frequency.value = frequency;
+                gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+                osc.start(audioContext.currentTime);
+                osc.stop(audioContext.currentTime + duration);
+            } catch (e) {
+                console.log('Audio error:', e);
+            }
+        }
+
+        function playBoostSound() {
+            try {
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(200, audioContext.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.15, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.08);
+                osc.start(audioContext.currentTime);
+                osc.stop(audioContext.currentTime + 0.08);
+            } catch (e) {
+                console.log('Audio error:', e);
+            }
+        }
+
+        function playDeathSound() {
+            try {
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(200, audioContext.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(50, audioContext.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.2, audioContext.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                osc.start(audioContext.currentTime);
+                osc.stop(audioContext.currentTime + 0.3);
+            } catch (e) {
+                console.log('Audio error:', e);
+            }
+        }
+
+        function playZoneSound() {
+            try {
+                const notes = [262, 330, 392];
+                for (let i = 0; i < notes.length; i++) {
+                    setTimeout(() => {
+                        const osc = audioContext.createOscillator();
+                        const gain = audioContext.createGain();
+                        osc.connect(gain);
+                        gain.connect(audioContext.destination);
+                        osc.frequency.value = notes[i];
+                        gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+                        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.15);
+                        osc.start(audioContext.currentTime);
+                        osc.stop(audioContext.currentTime + 0.15);
+                    }, i * 100);
+                }
+            } catch (e) {
+                console.log('Audio error:', e);
+            }
+        }
+
+        // Particle system
+        function createParticle(x, y, vx, vy, life, color, size = 3) {
+            particles.push({
+                x, y, vx, vy, life, maxLife: life, color, size
+            });
+        }
+
+        function createExplosion(x, y, count = 12, color = '#FFD700') {
+            for (let i = 0; i < count; i++) {
+                const angle = (Math.PI * 2 * i) / count;
+                const speed = 3 + Math.random() * 2;
+                const vx = Math.cos(angle) * speed;
+                const vy = Math.sin(angle) * speed;
+                createParticle(x, y, vx, vy, 0.5, color, 2);
+            }
+        }
+
+        function createJetFlame() {
+            // Particles from both nozzles (jetpack is on the left/back side in profile)
+            const nozzles = [
+                { x: player.x - 13.5, y: player.y + 17 },
+                { x: player.x - 6.5, y: player.y + 17 }
+            ];
+            const colors = ['#FF4500', '#FF6B35', '#FFD700', '#FFA500', '#FFFFFF'];
+            for (const nozzle of nozzles) {
+                for (let i = 0; i < 2; i++) {
+                    const angle = Math.PI / 2 + (Math.random() - 0.5) * 0.6;
+                    const speed = 2 + Math.random() * 3;
+                    const vx = Math.cos(angle) * speed * 0.3;
+                    const vy = Math.sin(angle) * speed;
+                    createParticle(nozzle.x, nozzle.y, vx, vy, 0.4, colors[Math.floor(Math.random() * colors.length)], 1.5 + Math.random() * 1.5);
+                }
+            }
+        }
+
+        // Obstacle generation
+        function generateObstacle() {
+            const zone = currentZone;
+            const obstacleWidth = 60;
+
+            // In The Unknown, gap shrinks and speed creeps up the deeper you go
+            let minGap = zone.gapSize;
+            let maxGap = zone.gapSize + 30;
+            if (depth >= 100) {
+                const depthPast100 = depth - 100;
+                // Gap shrinks by ~1px per 2 depth, floor at 85px (barely possible)
+                const gapReduction = Math.min(depthPast100 * 0.5, 33);
+                minGap = Math.max(85, zone.gapSize - gapReduction);
+                maxGap = minGap + 15;
+            }
+
+            const gap = minGap + Math.random() * (maxGap - minGap);
+            const topHeight = Math.random() * (canvas.height - gap - 100) + 50;
+
+            const obstacleX = canvas.width;
+            const topY = topHeight;
+            const bottomY = topHeight + gap;
+
+            obstacles.push({
+                x: obstacleX,
+                width: obstacleWidth,
+                topY: topY,
+                bottomY: bottomY,
+                passed: false,
+                seed: Math.random() * 1000,
+                type: zone.obstacleType,
+                color: zone.obstacleColor
+            });
+        }
+
+        // Update game state
+        function update(deltaTime) {
+            if (gameState === GAME_STATE.MENU) {
+                menuTime += deltaTime;
+                return;
+            }
+
+            if (gameState === GAME_STATE.DEAD) {
+                return;
+            }
+
+            // Check for zone change
+            const newZone = getZoneForDepth(depth);
+            if (newZone !== currentZone) {
+                currentZone = newZone;
+                lastZoneAnnounceTime = 0;
+                zoneAnnounceText = newZone.name;
+                playZoneSound();
+            }
+
+            lastZoneAnnounceTime += deltaTime;
+
+            // Apply variable gravity for asteroid belt
+            let gravity = currentZone.gravity;
+            if (depth >= 41 && depth <= 55) {
+                gravity += (Math.sin(depth + audioContext.currentTime * 2) * 0.06);
+            }
+
+            // The Unknown: escalating difficulty the deeper you go
+            if (depth >= 100) {
+                const depthPast100 = depth - 100;
+                // Gravity oscillates unpredictably, amplitude grows with depth
+                const gravBase = 0.22 + depthPast100 * 0.003;
+                const gravSwing = 0.08 + depthPast100 * 0.004;
+                gravity = gravBase + Math.sin(audioContext.currentTime * 2.5 + depthPast100 * 0.7) * gravSwing;
+                gravity = Math.max(0.12, Math.min(gravity, 0.55));
+            }
+
+            // Handle input
+            if (inputActive) {
+                player.velocityY = -6;
+                player.boostActive = true;
+                player.jetFlameLife = 0.15;
+                playBoostSound();
+                createJetFlame();
+                inputActive = false;
+            }
+
+            // Update velocity
+            player.velocityY += gravity * (deltaTime * 60);
+            if (player.velocityY > 10) player.velocityY = 10;
+
+            // Update position
+            player.y += player.velocityY * (deltaTime * 60);
+
+            // Update rotation based on velocity
+            const targetRotation = Math.min(Math.max(player.velocityY * 0.05, -0.3), 0.3);
+            player.rotation += (targetRotation - player.rotation) * 0.1;
+
+            // Update jetpack flame
+            player.jetFlameLife = Math.max(0, player.jetFlameLife - deltaTime);
+            player.boostActive = player.jetFlameLife > 0;
+
+            // Collision with top/bottom
+            if (player.y - player.height / 2 + 4 < 0 || player.y + player.height / 2 - 4 > canvas.height) {
+                die();
+                return;
+            }
+
+            // Update obstacles
+            let obstacleSpeed = currentZone.obstacleSpeed;
+            // The Unknown: speed creeps up the deeper you go, caps at 5.5
+            if (depth >= 100) {
+                obstacleSpeed = Math.min(4.0 + (depth - 100) * 0.02, 5.5);
+            }
+            for (let obstacle of obstacles) {
+                obstacle.x -= obstacleSpeed * (deltaTime * 60);
+
+                // Check collision
+                // Forgiving hitbox (smaller than visual character)
+                const hitboxShrink = 6;
+                const playerLeft = player.x - player.width / 2 + hitboxShrink;
+                const playerRight = player.x + player.width / 2 - hitboxShrink;
+                const playerTop = player.y - player.height / 2 + hitboxShrink;
+                const playerBottom = player.y + player.height / 2 - hitboxShrink;
+
+                if (playerRight > obstacle.x && playerLeft < obstacle.x + obstacle.width) {
+                    if (playerTop < obstacle.topY || playerBottom > obstacle.bottomY) {
+                        die();
+                        return;
+                    }
+                }
+
+                // Check if passed
+                if (!obstacle.passed && player.x > obstacle.x + obstacle.width) {
+                    obstacle.passed = true;
+                    depth++;
+                }
+            }
+
+            // Remove off-screen obstacles
+            obstacles = obstacles.filter(o => o.x > -100);
+
+            // Generate new obstacles (spacing tightens per zone, and further in The Unknown)
+            let spacing = currentZone.obstacleSpacing || 200;
+            if (depth >= 100) {
+                spacing = Math.max(130, 155 - (depth - 100) * 0.3);
+            }
+            if (obstacles.length === 0 || obstacles[obstacles.length - 1].x < canvas.width - spacing) {
+                generateObstacle();
+            }
+
+            // Update particles
+            for (let particle of particles) {
+                particle.x += particle.vx * (deltaTime * 60);
+                particle.y += particle.vy * (deltaTime * 60);
+                particle.vy += 0.1;
+                particle.life -= deltaTime;
+            }
+            particles = particles.filter(p => p.life > 0);
+        }
+
+        let isNewBest = false;
+        let deathZoneName = '';
+        let deathInputLocked = false;
+
+        function die() {
+            gameState = GAME_STATE.DEAD;
+            deathTime = 0;
+            deathInputLocked = true;
+            deathScreenCountStart = audioContext.currentTime;
+            playDeathSound();
+            createExplosion(player.x, player.y - 14, 20, '#FF6B9D');
+            createExplosion(player.x, player.y, 10, '#FFD700');
+
+            deathZoneName = currentZone.name;
+            isNewBest = depth > bestDepth;
+
+            if (depth > bestDepth) {
+                bestDepth = depth;
+                localStorage.setItem('deepSpaceBestDepth', bestDepth);
+            }
+
+            // Lock input for 2 seconds so they see the screen (and can screenshot)
+            setTimeout(() => { deathInputLocked = false; }, 2000);
+        }
+
+        function startNewGame() {
+            gameState = GAME_STATE.PLAYING;
+            depth = 0;
+            player.y = canvas.height / 2;
+            player.velocityY = 0;
+            player.rotation = 0;
+            obstacles = [];
+            particles = [];
+            currentZone = ZONES[0];
+            lastZoneAnnounceTime = 999;
+            zoneAnnounceText = '';
+            generateObstacle();
+        }
+
+        // Drawing functions
+        function drawStarField() {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.globalAlpha = 0.3;
+            const seed = Math.floor(depth / 10);
+            const starCount = 40;
+            for (let i = 0; i < starCount; i++) {
+                const pseudoRand = Math.sin(i * 12.9898 + seed * 78.233) * 43758.5453;
+                const x = (pseudoRand % canvas.width + canvas.width) % canvas.width;
+                const y = (Math.sin(i * 94.673 + seed * 45.164) * 43758.5453 % canvas.height + canvas.height) % canvas.height;
+                const size = (pseudoRand % 1.5) * 0.5;
+                ctx.fillRect(x, y, size, size);
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        function drawBackground() {
+            const zone = currentZone;
+            let color1 = zone.bgColor1;
+            let color2 = zone.bgColor2;
+
+            // Add zone transition interpolation
+            if (lastZoneAnnounceTime < 0.5) {
+                const progress = lastZoneAnnounceTime / 0.5;
+                const prevZoneIdx = Math.max(0, ZONES.indexOf(zone) - 1);
+                if (prevZoneIdx !== ZONES.indexOf(zone)) {
+                    const prevZone = ZONES[prevZoneIdx];
+                    // Lerp colors
+                }
+            }
+
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, color2);
+            gradient.addColorStop(1, color1);
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawStarField();
+        }
+
+        function drawBaby() {
+            ctx.save();
+            ctx.translate(player.x, player.y);
+            ctx.rotate(player.rotation);
+            player.animTime = (player.animTime || 0) + 0.05;
+
+            const s = 1.0;
+            const bobble = gameState === GAME_STATE.PLAYING ? Math.sin(player.animTime * 3) * 0.8 : 0;
+            const legKick = gameState === GAME_STATE.PLAYING ? Math.sin(player.animTime * 5) * 0.25 : 0;
+            const armFloat = Math.sin(player.animTime * 2.5) * 0.15;
+
+            // Character faces RIGHT (profile view)
+            // Body center is at 0,0. Helmet above, legs below, jetpack on left (back), visor on right (front).
+
+            // ============================================
+            // JETPACK (on the back / left side, drawn first)
+            // ============================================
+
+            // Main jetpack body
+            ctx.fillStyle = '#7A756F';
+            roundRect(ctx, -18 * s, -8 * s, 14 * s, 24 * s, 4 * s);
+            ctx.fill();
+            // Jetpack highlight edge
+            ctx.fillStyle = '#8B8682';
+            roundRect(ctx, -17 * s, -7 * s, 6 * s, 22 * s, 3 * s);
+            ctx.fill();
+
+            // Top canister
+            ctx.fillStyle = '#9E9893';
+            ctx.beginPath();
+            ctx.arc(-11 * s, -10 * s, 4.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#706B66';
+            ctx.beginPath();
+            ctx.arc(-11 * s, -10 * s, 2.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+            // Canister rim
+            ctx.strokeStyle = '#5A5550';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.arc(-11 * s, -10 * s, 4.5 * s, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Jetpack panel details
+            ctx.fillStyle = '#5A5550';
+            roundRect(ctx, -16 * s, -2 * s, 10 * s, 6 * s, 2 * s);
+            ctx.fill();
+            // Indicator lights on jetpack
+            ctx.fillStyle = '#00FF88';
+            ctx.beginPath();
+            ctx.arc(-14 * s, 1 * s, 1.2 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#FF4444';
+            ctx.beginPath();
+            ctx.arc(-10 * s, 1 * s, 1.2 * s, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Bottom nozzles (two exhaust ports)
+            ctx.fillStyle = '#5A5550';
+            roundRect(ctx, -16 * s, 14 * s, 5 * s, 4 * s, 1.5 * s);
+            ctx.fill();
+            roundRect(ctx, -9 * s, 14 * s, 5 * s, 4 * s, 1.5 * s);
+            ctx.fill();
+            // Nozzle inner dark
+            ctx.fillStyle = '#2C2828';
+            ctx.beginPath();
+            ctx.arc(-13.5 * s, 17 * s, 2 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(-6.5 * s, 17 * s, 2 * s, 0, Math.PI * 2);
+            ctx.fill();
+
+            // === JETPACK FLAMES ===
+            if (player.boostActive) {
+                // Left nozzle flame
+                const flameH1 = 10 + Math.random() * 8;
+                const flameH2 = 10 + Math.random() * 8;
+
+                for (let nozzleX of [-13.5, -6.5]) {
+                    const fh = nozzleX < -10 ? flameH1 : flameH2;
+                    // Outer flame (orange-red)
+                    ctx.fillStyle = '#FF4500';
+                    ctx.globalAlpha = 0.7;
+                    ctx.beginPath();
+                    ctx.moveTo((nozzleX - 2.5) * s, 17 * s);
+                    ctx.lineTo((nozzleX + 2.5) * s, 17 * s);
+                    ctx.lineTo((nozzleX + 1) * s, (17 + fh) * s);
+                    ctx.lineTo((nozzleX - 1) * s, (17 + fh * 0.9) * s);
+                    ctx.closePath();
+                    ctx.fill();
+                    // Mid flame (orange)
+                    ctx.fillStyle = '#FF8C00';
+                    ctx.globalAlpha = 0.8;
+                    ctx.beginPath();
+                    ctx.moveTo((nozzleX - 1.5) * s, 17 * s);
+                    ctx.lineTo((nozzleX + 1.5) * s, 17 * s);
+                    ctx.lineTo((nozzleX + 0.3) * s, (17 + fh * 0.7) * s);
+                    ctx.lineTo((nozzleX - 0.3) * s, (17 + fh * 0.65) * s);
+                    ctx.closePath();
+                    ctx.fill();
+                    // Inner flame (yellow-white)
+                    ctx.fillStyle = '#FFD700';
+                    ctx.globalAlpha = 0.9;
+                    ctx.beginPath();
+                    ctx.moveTo((nozzleX - 0.8) * s, 17 * s);
+                    ctx.lineTo((nozzleX + 0.8) * s, 17 * s);
+                    ctx.lineTo(nozzleX * s, (17 + fh * 0.45) * s);
+                    ctx.closePath();
+                    ctx.fill();
+                    // Core (white hot)
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.globalAlpha = 0.6;
+                    ctx.beginPath();
+                    ctx.moveTo((nozzleX - 0.4) * s, 17 * s);
+                    ctx.lineTo((nozzleX + 0.4) * s, 17 * s);
+                    ctx.lineTo(nozzleX * s, (17 + fh * 0.25) * s);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                ctx.globalAlpha = 1;
+
+                // Flame glow effect
+                const glowGrad = ctx.createRadialGradient(
+                    -10 * s, 20 * s, 0,
+                    -10 * s, 20 * s, 15 * s
+                );
+                glowGrad.addColorStop(0, 'rgba(255, 140, 0, 0.15)');
+                glowGrad.addColorStop(1, 'rgba(255, 140, 0, 0)');
+                ctx.fillStyle = glowGrad;
+                ctx.fillRect(-25 * s, 10 * s, 30 * s, 25 * s);
+            }
+
+            // ============================================
+            // BACK LEG (further from viewer)
+            // ============================================
+            ctx.save();
+            ctx.translate(-2 * s, 16 * s);
+            ctx.rotate(-legKick * 0.8);
+            // Suit leg
+            ctx.fillStyle = '#D0C8C0';
+            roundRect(ctx, -3 * s, 0, 6 * s, 11 * s, 2.5 * s);
+            ctx.fill();
+            // Boot
+            ctx.fillStyle = '#222222';
+            roundRect(ctx, -2 * s, 8 * s, 8 * s, 5 * s, 2 * s);
+            ctx.fill();
+            // Boot sole
+            ctx.fillStyle = '#111111';
+            roundRect(ctx, -2 * s, 11 * s, 9 * s, 2.5 * s, 1 * s);
+            ctx.fill();
+            ctx.restore();
+
+            // ============================================
+            // BODY (torso, profile - narrower)
+            // ============================================
+            ctx.fillStyle = '#E8E0D8';
+            roundRect(ctx, -8 * s, -4 * s, 16 * s, 22 * s, 5 * s);
+            ctx.fill();
+
+            // Suit panel lines
+            ctx.strokeStyle = '#C8C0B8';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(0, -3 * s);
+            ctx.lineTo(0, 17 * s);
+            ctx.stroke();
+
+            // === HARNESS (profile view - one diagonal strap visible) ===
+            ctx.strokeStyle = '#5C3A21';
+            ctx.lineWidth = 2.5 * s;
+            ctx.lineCap = 'round';
+            // Main strap going diagonally across chest
+            ctx.beginPath();
+            ctx.moveTo(-4 * s, -4 * s);
+            ctx.lineTo(3 * s, 14 * s);
+            ctx.stroke();
+            // Horizontal belt
+            ctx.lineWidth = 2 * s;
+            ctx.beginPath();
+            ctx.moveTo(-6 * s, 8 * s);
+            ctx.lineTo(6 * s, 8 * s);
+            ctx.stroke();
+            // Buckle
+            ctx.fillStyle = '#CC0000';
+            ctx.beginPath();
+            ctx.arc(1 * s, 8 * s, 2.2 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#FF4444';
+            ctx.beginPath();
+            ctx.arc(1 * s, 8 * s, 1.2 * s, 0, Math.PI * 2);
+            ctx.fill();
+
+            // === ASTRO BADGE (on chest, fitted to body width) ===
+            ctx.save();
+            ctx.translate(0, 12 * s);
+            ctx.rotate(0.05);
+            ctx.fillStyle = '#E8DDD0';
+            roundRect(ctx, -6 * s, -2.5 * s, 12 * s, 5 * s, 1.2 * s);
+            ctx.fill();
+            ctx.strokeStyle = '#C8C0B8';
+            ctx.lineWidth = 0.5;
+            roundRect(ctx, -6 * s, -2.5 * s, 12 * s, 5 * s, 1.2 * s);
+            ctx.stroke();
+            ctx.fillStyle = '#1A6FB5';
+            ctx.font = 'bold ' + (3.2 * s) + 'px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('ASTRO', 0, 0.2 * s);
+            ctx.restore();
+
+            // ============================================
+            // FRONT LEG (closer to viewer)
+            // ============================================
+            ctx.save();
+            ctx.translate(2 * s, 16 * s);
+            ctx.rotate(legKick);
+            // Suit leg
+            ctx.fillStyle = '#E8E0D8';
+            roundRect(ctx, -3 * s, 0, 6 * s, 11 * s, 2.5 * s);
+            ctx.fill();
+            // Boot
+            ctx.fillStyle = '#2C2C2C';
+            roundRect(ctx, -2 * s, 8 * s, 8 * s, 5 * s, 2 * s);
+            ctx.fill();
+            // Boot sole
+            ctx.fillStyle = '#1a1a1a';
+            roundRect(ctx, -2 * s, 11 * s, 9 * s, 2.5 * s, 1 * s);
+            ctx.fill();
+            ctx.restore();
+
+            // ============================================
+            // ARM (profile - tucked back near jetpack)
+            // ============================================
+            ctx.save();
+            ctx.translate(-3 * s, 3 * s);
+            ctx.rotate(-0.15 + armFloat);
+            // Upper arm
+            ctx.fillStyle = '#E8E0D8';
+            roundRect(ctx, -2.5 * s, 0, 5 * s, 10 * s, 2.5 * s);
+            ctx.fill();
+            // Bitcoin patch (orange circle with ₿)
+            ctx.fillStyle = '#F7931A';
+            ctx.beginPath();
+            ctx.arc(0, 3.5 * s, 2.2 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold ' + (3 * s) + 'px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('\u20BF', 0, 3.5 * s);
+            // Glove
+            ctx.fillStyle = '#C8C0B0';
+            ctx.beginPath();
+            ctx.arc(0, 12 * s, 3.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+            // Glove highlight
+            ctx.fillStyle = '#D8D0C0';
+            ctx.beginPath();
+            ctx.arc(-0.5 * s, 11 * s, 1.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+
+            // ============================================
+            // HELMET (oversized, profile view - facing right)
+            // ============================================
+            const helmetR = 17 * s;
+            const helmetCX = 2 * s;  // slightly forward
+            const helmetCY = -16 * s + bobble;
+
+            // Collar / neck ring
+            ctx.fillStyle = '#9E9893';
+            ctx.beginPath();
+            ctx.ellipse(helmetCX, helmetCY + helmetR - 3 * s, 10 * s, 4 * s, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Helmet shell (back half - lighter)
+            ctx.fillStyle = '#E8E0D8';
+            ctx.beginPath();
+            ctx.arc(helmetCX, helmetCY, helmetR, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Helmet outline
+            ctx.strokeStyle = '#B0A8A0';
+            ctx.lineWidth = 1.2;
+            ctx.beginPath();
+            ctx.arc(helmetCX, helmetCY, helmetR, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Helmet panel line
+            ctx.strokeStyle = '#C8C0B8';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.arc(helmetCX, helmetCY, helmetR * 0.95, -0.6, 0.6);
+            ctx.stroke();
+
+            // Ear piece (on the back side of helmet / left)
+            ctx.fillStyle = '#9E9893';
+            ctx.beginPath();
+            ctx.arc(helmetCX - 15 * s, helmetCY - 1 * s, 3.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#706B66';
+            ctx.beginPath();
+            ctx.arc(helmetCX - 15 * s, helmetCY - 1 * s, 2 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#5A5550';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.arc(helmetCX - 15 * s, helmetCY - 1 * s, 3.5 * s, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // ============================================
+            // VISOR (cosmic, profile - facing right, takes up front half of helmet)
+            // ============================================
+            const visorW = 14 * s;
+            const visorH = 13 * s;
+            const visorCX = helmetCX + 4 * s;
+            const visorCY = helmetCY + 1 * s;
+
+            // Clip to visor shape (rounded rectangle, shifted right for profile)
+            ctx.save();
+            ctx.beginPath();
+            // Create a visor shape that's a large rounded area on the right side of helmet
+            ctx.ellipse(visorCX, visorCY, visorW * 0.85, visorH, 0, 0, Math.PI * 2);
+            ctx.clip();
+
+            // Cosmic gradient
+            const cosmicGrad = ctx.createRadialGradient(
+                visorCX - 4 * s, visorCY - 4 * s, 0,
+                visorCX, visorCY, visorW
+            );
+            cosmicGrad.addColorStop(0, '#1a4a6e');
+            cosmicGrad.addColorStop(0.25, '#2a3a6e');
+            cosmicGrad.addColorStop(0.45, '#4a2a5e');
+            cosmicGrad.addColorStop(0.65, '#2a4a3e');
+            cosmicGrad.addColorStop(0.85, '#3a2a4e');
+            cosmicGrad.addColorStop(1, '#1a2a3e');
+            ctx.fillStyle = cosmicGrad;
+            ctx.fillRect(visorCX - visorW, visorCY - visorH, visorW * 2, visorH * 2);
+
+            // Nebula swirls (animated)
+            const nt = player.animTime * 0.3;
+            // Teal nebula
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = '#4a9aae';
+            ctx.beginPath();
+            ctx.ellipse(visorCX - 2 * s + Math.sin(nt) * 2, visorCY - 3 * s, 6 * s, 3.5 * s, 0.4 + nt * 0.1, 0, Math.PI * 2);
+            ctx.fill();
+            // Purple/magenta nebula
+            ctx.fillStyle = '#9a4a9e';
+            ctx.globalAlpha = 0.3;
+            ctx.beginPath();
+            ctx.ellipse(visorCX + 3 * s + Math.cos(nt * 0.7) * 2, visorCY + 2 * s, 5 * s, 3 * s, -0.5 + nt * 0.12, 0, Math.PI * 2);
+            ctx.fill();
+            // Green nebula
+            ctx.fillStyle = '#4a9e5a';
+            ctx.globalAlpha = 0.2;
+            ctx.beginPath();
+            ctx.ellipse(visorCX + 5 * s, visorCY - 1 * s, 4 * s, 5 * s, 0.8, 0, Math.PI * 2);
+            ctx.fill();
+            // Warm pink/red glow
+            ctx.fillStyle = '#9e4a6a';
+            ctx.globalAlpha = 0.2;
+            ctx.beginPath();
+            ctx.ellipse(visorCX - 4 * s, visorCY + 3 * s, 5 * s, 3 * s, 1.2, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.globalAlpha = 1;
+
+            // Stars in visor
+            ctx.fillStyle = '#FFFFFF';
+            const visorStars = [
+                [-4, -5, 1.2], [-7, 2, 0.8], [4, -6, 1.0], [8, 1, 0.7],
+                [-1, 4, 0.9], [6, -3, 0.6], [-6, -1, 0.5], [2, 5, 0.8],
+                [9, -4, 0.7], [-3, 6, 0.6], [7, 4, 0.5], [-8, -3, 0.4],
+                [3, -2, 0.3], [-5, 3, 0.4], [5, 6, 0.3]
+            ];
+            for (const [sx, sy, sr] of visorStars) {
+                const twinkle = 0.4 + 0.6 * Math.sin(player.animTime * 2 + sx * sy * 0.5);
+                ctx.globalAlpha = twinkle * 0.9;
+                ctx.beginPath();
+                ctx.arc(visorCX + sx * s, visorCY + sy * s, sr * s, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Pink dots
+            ctx.fillStyle = '#FF69B4';
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.arc(visorCX - 5 * s, visorCY - 1 * s, 0.8 * s, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(visorCX + 3 * s, visorCY + 4 * s, 0.6 * s, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Planets
+            ctx.globalAlpha = 0.55;
+            ctx.fillStyle = '#C8A868';
+            ctx.beginPath();
+            ctx.arc(visorCX + 7 * s, visorCY - 2 * s, 2.2 * s, 0, Math.PI * 2);
+            ctx.fill();
+            // Planet glow
+            ctx.globalAlpha = 0.2;
+            ctx.beginPath();
+            ctx.arc(visorCX + 7 * s, visorCY - 2 * s, 3.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#8EB0CE';
+            ctx.globalAlpha = 0.5;
+            ctx.beginPath();
+            ctx.arc(visorCX - 2 * s, visorCY + 5 * s, 1.5 * s, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.globalAlpha = 1;
+
+            // Visor glare (top-left reflection)
+            const glareGrad = ctx.createRadialGradient(
+                visorCX - 5 * s, visorCY - 6 * s, 0,
+                visorCX - 5 * s, visorCY - 6 * s, 9 * s
+            );
+            glareGrad.addColorStop(0, 'rgba(255, 255, 255, 0.3)');
+            glareGrad.addColorStop(0.4, 'rgba(255, 255, 255, 0.08)');
+            glareGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+            ctx.fillStyle = glareGrad;
+            ctx.fillRect(visorCX - visorW, visorCY - visorH, visorW * 2, visorH * 2);
+
+            // Secondary glare (bottom-right, subtle)
+            const glare2 = ctx.createRadialGradient(
+                visorCX + 6 * s, visorCY + 5 * s, 0,
+                visorCX + 6 * s, visorCY + 5 * s, 5 * s
+            );
+            glare2.addColorStop(0, 'rgba(200, 220, 255, 0.1)');
+            glare2.addColorStop(1, 'rgba(200, 220, 255, 0)');
+            ctx.fillStyle = glare2;
+            ctx.fillRect(visorCX - visorW, visorCY - visorH, visorW * 2, visorH * 2);
+
+            ctx.restore();
+
+            // Visor border/rim
+            ctx.strokeStyle = '#5A5550';
+            ctx.lineWidth = 1.8 * s;
+            ctx.beginPath();
+            ctx.ellipse(visorCX, visorCY, visorW * 0.85, visorH, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Inner rim highlight
+            ctx.strokeStyle = 'rgba(180, 175, 168, 0.4)';
+            ctx.lineWidth = 0.8 * s;
+            ctx.beginPath();
+            ctx.ellipse(visorCX, visorCY, visorW * 0.82, visorH * 0.96, 0, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.restore();
+        }
+
+        // Helper: draw rounded rectangle
+        function roundRect(ctx, x, y, w, h, r) {
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+        }
+
+        // Seeded pseudo-random for consistent obstacle visuals
+        function seededRand(seed, i) {
+            return ((Math.sin(seed * 9.1 + i * 7.77) * 43758.5453) % 1 + 1) % 1;
+        }
+
+        function drawObstacles() {
+            for (let obstacle of obstacles) {
+                const ox = obstacle.x;
+                const ow = obstacle.width;
+                const s = obstacle.seed;
+                const type = obstacle.type;
+                const cx = ox + ow / 2;
+
+                switch (type) {
+
+                // ── ZONE 1: Clouds ──
+                case 'cloud':
+                    // Top cloud cluster
+                    drawCloudFormation(ox, 0, ow, obstacle.topY, s);
+                    // Bottom cloud cluster
+                    drawCloudFormation(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50);
+                    break;
+
+                // ── ZONE 2: Satellite / Space Junk ──
+                case 'satellite':
+                    drawMetalBeam(ox, 0, ow, obstacle.topY, s, '#8899AA', '#667788');
+                    drawMetalBeam(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50, '#8899AA', '#667788');
+                    // Solar panels at gap edges
+                    drawSolarPanel(cx, obstacle.topY, ow, s);
+                    drawSolarPanel(cx, obstacle.bottomY, ow, s + 30, true);
+                    break;
+
+                // ── ZONE 3: Moon / Crater rock ──
+                case 'crater':
+                    drawRockFormation(ox, 0, ow, obstacle.topY, s, '#707070', '#585858', '#4A4A4A');
+                    drawRockFormation(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50, '#707070', '#585858', '#4A4A4A');
+                    break;
+
+                // ── ZONE 4: Mars canyon ──
+                case 'canyon':
+                    drawRockFormation(ox, 0, ow, obstacle.topY, s, '#B85A3A', '#8B4513', '#6B3410');
+                    drawRockFormation(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50, '#B85A3A', '#8B4513', '#6B3410');
+                    // Dust particles near gap
+                    drawDustParticles(ox, obstacle.topY, obstacle.bottomY, ow, s);
+                    break;
+
+                // ── ZONE 5: Asteroids ──
+                case 'asteroid':
+                    drawAsteroidCluster(ox, 0, ow, obstacle.topY, s);
+                    drawAsteroidCluster(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50);
+                    break;
+
+                // ── ZONE 6: Jupiter gas bands ──
+                case 'gas':
+                    drawGasBands(ox, 0, ow, obstacle.topY, s, '#CC7722', '#8B4513', '#AA5500');
+                    drawGasBands(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50, '#CC7722', '#8B4513', '#AA5500');
+                    // Lightning near gap
+                    drawLightning(cx, obstacle.topY, 15, s);
+                    break;
+
+                // ── ZONE 7: Saturn ring debris / ice ──
+                case 'ring':
+                    drawIceFormation(ox, 0, ow, obstacle.topY, s);
+                    drawIceFormation(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50);
+                    break;
+
+                // ── ZONE 8: Deep space / void ──
+                case 'void':
+                    drawVoidBarrier(ox, 0, ow, obstacle.topY, s);
+                    drawVoidBarrier(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50);
+                    break;
+
+                // ── ZONE 9: Unknown / Abstract ──
+                case 'unknown':
+                    drawUnknownBarrier(ox, 0, ow, obstacle.topY, s);
+                    drawUnknownBarrier(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50);
+                    break;
+                }
+            }
+        }
+
+        // ── OBSTACLE DRAWING HELPERS ──
+
+        function drawCloudFormation(x, y, w, h, seed) {
+            if (h < 5) return;
+            // Layered puffy clouds
+            const cloudColors = ['rgba(230,240,250,0.9)', 'rgba(210,225,240,0.8)', 'rgba(240,245,255,0.7)'];
+            const cx = x + w / 2;
+            // Fill base
+            ctx.fillStyle = 'rgba(220,235,250,0.6)';
+            ctx.fillRect(x, y, w, h);
+            // Cloud puffs along the gap edge
+            const edgeY = (y === 0) ? y + h : y;
+            const dir = (y === 0) ? 1 : -1;
+            for (let i = 0; i < 6; i++) {
+                const px = x - 8 + seededRand(seed, i) * (w + 16);
+                const py = edgeY - dir * (seededRand(seed, i + 10) * 12);
+                const r = 10 + seededRand(seed, i + 20) * 15;
+                ctx.fillStyle = cloudColors[i % cloudColors.length];
+                ctx.beginPath();
+                ctx.arc(px, py, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            // Inner puffs for depth
+            for (let i = 0; i < 4; i++) {
+                const px = x + seededRand(seed, i + 30) * w;
+                const py = edgeY - dir * (15 + seededRand(seed, i + 40) * 20);
+                const r = 8 + seededRand(seed, i + 50) * 12;
+                ctx.fillStyle = 'rgba(245,248,255,0.5)';
+                ctx.beginPath();
+                ctx.arc(px, py, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawMetalBeam(x, y, w, h, seed, color1, color2) {
+            if (h < 5) return;
+            // Metallic beam with panel segments
+            const grad = ctx.createLinearGradient(x, 0, x + w, 0);
+            grad.addColorStop(0, color2);
+            grad.addColorStop(0.3, color1);
+            grad.addColorStop(0.7, color1);
+            grad.addColorStop(1, color2);
+            ctx.fillStyle = grad;
+            ctx.fillRect(x + 4, y, w - 8, h);
+            // Edge rails
+            ctx.fillStyle = color2;
+            ctx.fillRect(x, y, 6, h);
+            ctx.fillRect(x + w - 6, y, 6, h);
+            // Panel lines
+            ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+            ctx.lineWidth = 1;
+            const segH = 25;
+            for (let py = y + segH; py < y + h; py += segH) {
+                ctx.beginPath();
+                ctx.moveTo(x + 6, py);
+                ctx.lineTo(x + w - 6, py);
+                ctx.stroke();
+            }
+            // Rivets
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            for (let i = 0; i < Math.floor(h / 30); i++) {
+                ctx.beginPath();
+                ctx.arc(x + 3, y + 15 + i * 30, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.beginPath();
+                ctx.arc(x + w - 3, y + 15 + i * 30, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawSolarPanel(cx, edgeY, w, seed, flip) {
+            const dir = flip ? -1 : 1;
+            ctx.fillStyle = '#2244AA';
+            ctx.globalAlpha = 0.7;
+            // Panel
+            const pw = w + 16;
+            const ph = 6;
+            ctx.fillRect(cx - pw / 2, edgeY - (flip ? -2 : ph + 2), pw, ph);
+            // Grid lines on panel
+            ctx.strokeStyle = 'rgba(100,150,255,0.4)';
+            ctx.lineWidth = 0.5;
+            const panelY = edgeY - (flip ? -2 : ph + 2);
+            for (let i = 1; i < 4; i++) {
+                ctx.beginPath();
+                ctx.moveTo(cx - pw / 2 + (pw / 4) * i, panelY);
+                ctx.lineTo(cx - pw / 2 + (pw / 4) * i, panelY + ph);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+        }
+
+        function drawRockFormation(x, y, w, h, seed, c1, c2, c3) {
+            if (h < 5) return;
+            // Base rock fill
+            const grad = ctx.createLinearGradient(x, y, x + w, y);
+            grad.addColorStop(0, c3);
+            grad.addColorStop(0.5, c1);
+            grad.addColorStop(1, c2);
+            ctx.fillStyle = grad;
+            ctx.fillRect(x, y, w, h);
+            // Jagged edge at the gap
+            const edgeY = (y === 0) ? y + h : y;
+            const dir = (y === 0) ? -1 : 1;
+            ctx.fillStyle = c1;
+            ctx.beginPath();
+            ctx.moveTo(x - 5, edgeY);
+            const points = 8;
+            for (let i = 0; i <= points; i++) {
+                const px = x - 5 + ((w + 10) / points) * i;
+                const jag = seededRand(seed, i) * 18 + 4;
+                ctx.lineTo(px, edgeY - dir * jag);
+            }
+            ctx.lineTo(x + w + 5, edgeY);
+            ctx.closePath();
+            ctx.fill();
+            // Cracks / texture lines
+            ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < 3; i++) {
+                const sx = x + seededRand(seed, i + 60) * w;
+                const sy = (y === 0) ? y + h - 10 - seededRand(seed, i + 70) * (h * 0.3) : y + 10 + seededRand(seed, i + 70) * (h * 0.3);
+                ctx.beginPath();
+                ctx.moveTo(sx, sy);
+                ctx.lineTo(sx + (seededRand(seed, i + 80) - 0.5) * 20, sy + (dir) * (10 + seededRand(seed, i + 90) * 15));
+                ctx.stroke();
+            }
+            // Highlight spots
+            ctx.fillStyle = 'rgba(255,255,255,0.08)';
+            for (let i = 0; i < 4; i++) {
+                const hx = x + seededRand(seed, i + 100) * w;
+                const hy = (y === 0) ? y + seededRand(seed, i + 110) * h * 0.7 : y + h * 0.3 + seededRand(seed, i + 110) * h * 0.7;
+                ctx.beginPath();
+                ctx.arc(hx, hy, 3 + seededRand(seed, i + 120) * 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawDustParticles(x, topY, bottomY, w, seed) {
+            ctx.fillStyle = 'rgba(180, 100, 60, 0.25)';
+            const t = player.animTime || 0;
+            for (let i = 0; i < 5; i++) {
+                const px = x + seededRand(seed, i + 200) * w;
+                const py = topY + (bottomY - topY) * seededRand(seed, i + 210);
+                const drift = Math.sin(t * 1.5 + i * 2) * 4;
+                ctx.beginPath();
+                ctx.arc(px + drift, py, 1.5 + seededRand(seed, i + 220) * 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawAsteroidCluster(x, y, w, h, seed) {
+            if (h < 5) return;
+            // Dark base
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(x, y, w, h);
+            // Chunky asteroid shapes
+            const edgeY = (y === 0) ? y + h : y;
+            const dir = (y === 0) ? -1 : 1;
+            for (let i = 0; i < 5; i++) {
+                const ax = x - 5 + seededRand(seed, i) * (w + 10);
+                const ay = edgeY - dir * (seededRand(seed, i + 10) * 15);
+                const ar = 8 + seededRand(seed, i + 20) * 14;
+                // Irregular shape (rough circle)
+                ctx.fillStyle = '#3A3A3A';
+                ctx.beginPath();
+                for (let a = 0; a < 8; a++) {
+                    const angle = (a / 8) * Math.PI * 2;
+                    const wobble = 0.7 + seededRand(seed, i * 8 + a + 30) * 0.6;
+                    const px = ax + Math.cos(angle) * ar * wobble;
+                    const py = ay + Math.sin(angle) * ar * wobble;
+                    if (a === 0) ctx.moveTo(px, py);
+                    else ctx.lineTo(px, py);
+                }
+                ctx.closePath();
+                ctx.fill();
+                // Crater on asteroid
+                ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                ctx.beginPath();
+                ctx.arc(ax + 2, ay - 1, ar * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+                // Highlight
+                ctx.fillStyle = 'rgba(255,255,255,0.06)';
+                ctx.beginPath();
+                ctx.arc(ax - 2, ay - 3, ar * 0.25, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            // Fill behind rocks
+            ctx.fillStyle = '#222222';
+            const fillStart = (y === 0) ? y : edgeY + 15;
+            const fillH = (y === 0) ? h - 20 : h - 15;
+            if (fillH > 0) ctx.fillRect(x, fillStart, w, fillH);
+        }
+
+        function drawGasBands(x, y, w, h, seed, c1, c2, c3) {
+            if (h < 5) return;
+            // Swirling gas layers
+            const bandH = 12;
+            const colors = [c1, c2, c3, c1, c2];
+            for (let i = 0; i * bandH < h; i++) {
+                const by = y + i * bandH;
+                const bh = Math.min(bandH, y + h - by);
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.globalAlpha = 0.6 + seededRand(seed, i) * 0.4;
+                ctx.fillRect(x - 3, by, w + 6, bh);
+            }
+            ctx.globalAlpha = 1;
+            // Swirl effect near gap edge
+            const edgeY = (y === 0) ? y + h : y;
+            ctx.fillStyle = 'rgba(255,140,0,0.2)';
+            const t = player.animTime || 0;
+            for (let i = 0; i < 3; i++) {
+                const sx = x + seededRand(seed, i + 50) * w;
+                const sy = edgeY + (y === 0 ? -1 : 1) * (seededRand(seed, i + 60) * 10);
+                ctx.beginPath();
+                ctx.ellipse(sx + Math.sin(t + i) * 3, sy, 8 + seededRand(seed, i + 70) * 6, 4, t * 0.2 + i, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawLightning(cx, edgeY, len, seed) {
+            const t = player.animTime || 0;
+            // Flicker
+            if (Math.sin(t * 8 + seed) < 0.3) return;
+            ctx.strokeStyle = 'rgba(255, 255, 150, 0.7)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(cx, edgeY);
+            let lx = cx, ly = edgeY;
+            for (let i = 0; i < 4; i++) {
+                lx += (seededRand(seed, i + 80) - 0.5) * 12;
+                ly += len / 4;
+                ctx.lineTo(lx, ly);
+            }
+            ctx.stroke();
+            // Glow
+            ctx.strokeStyle = 'rgba(255, 255, 100, 0.2)';
+            ctx.lineWidth = 4;
+            ctx.stroke();
+        }
+
+        function drawIceFormation(x, y, w, h, seed) {
+            if (h < 5) return;
+            // Translucent ice base
+            const grad = ctx.createLinearGradient(x, y, x + w, y + h);
+            grad.addColorStop(0, 'rgba(180, 210, 230, 0.7)');
+            grad.addColorStop(0.5, 'rgba(200, 225, 245, 0.8)');
+            grad.addColorStop(1, 'rgba(170, 200, 220, 0.6)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(x, y, w, h);
+            // Crystal/shard edge
+            const edgeY = (y === 0) ? y + h : y;
+            const dir = (y === 0) ? -1 : 1;
+            ctx.fillStyle = 'rgba(200, 225, 250, 0.9)';
+            ctx.beginPath();
+            ctx.moveTo(x - 3, edgeY);
+            const shards = 6;
+            for (let i = 0; i <= shards; i++) {
+                const px = x - 3 + ((w + 6) / shards) * i;
+                const isSharp = i % 2 === 1;
+                const jag = isSharp ? (12 + seededRand(seed, i) * 16) : (2 + seededRand(seed, i + 10) * 5);
+                ctx.lineTo(px, edgeY - dir * jag);
+            }
+            ctx.lineTo(x + w + 3, edgeY);
+            ctx.closePath();
+            ctx.fill();
+            // Sparkle / reflection dots
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            const t = player.animTime || 0;
+            for (let i = 0; i < 5; i++) {
+                const sx = x + seededRand(seed, i + 30) * w;
+                const sy = (y === 0) ? y + h * 0.5 + seededRand(seed, i + 40) * h * 0.4 : y + seededRand(seed, i + 40) * h * 0.5;
+                const sparkle = 0.3 + 0.7 * Math.abs(Math.sin(t * 3 + i * 1.7));
+                ctx.globalAlpha = sparkle * 0.6;
+                ctx.beginPath();
+                ctx.arc(sx, sy, 1 + seededRand(seed, i + 50), 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.globalAlpha = 1;
+            // Internal fracture lines
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i < 2; i++) {
+                const fx = x + 10 + seededRand(seed, i + 60) * (w - 20);
+                const fy1 = (y === 0) ? y + h * 0.3 : y + h * 0.1;
+                ctx.beginPath();
+                ctx.moveTo(fx, fy1);
+                ctx.lineTo(fx + (seededRand(seed, i + 70) - 0.5) * 15, fy1 + 20 + seededRand(seed, i + 80) * 20);
+                ctx.stroke();
+            }
+        }
+
+        function drawVoidBarrier(x, y, w, h, seed) {
+            if (h < 5) return;
+            // Nearly invisible, dark matter
+            ctx.fillStyle = 'rgba(10, 10, 25, 0.8)';
+            ctx.fillRect(x, y, w, h);
+            // Faint edge glow (so you can barely see it)
+            const edgeY = (y === 0) ? y + h : y;
+            const dir = (y === 0) ? 1 : -1;
+            const glowGrad = ctx.createLinearGradient(x, edgeY - dir * 15, x, edgeY + dir * 5);
+            glowGrad.addColorStop(0, 'rgba(40, 40, 80, 0)');
+            glowGrad.addColorStop(1, 'rgba(60, 50, 100, 0.3)');
+            ctx.fillStyle = glowGrad;
+            ctx.fillRect(x - 3, Math.min(edgeY - 15, edgeY + 5), w + 6, 20);
+            // Sparse dim particles
+            const t = player.animTime || 0;
+            ctx.fillStyle = 'rgba(80, 70, 120, 0.3)';
+            for (let i = 0; i < 3; i++) {
+                const px = x + seededRand(seed, i) * w;
+                const py = edgeY - dir * (5 + seededRand(seed, i + 10) * 10);
+                const drift = Math.sin(t * 0.8 + i * 3) * 3;
+                ctx.beginPath();
+                ctx.arc(px + drift, py, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawUnknownBarrier(x, y, w, h, seed) {
+            if (h < 5) return;
+            const t = player.animTime || 0;
+            // Shifting abstract color
+            const hue = ((t * 20 + seed) % 360);
+            ctx.fillStyle = 'hsla(' + hue + ', 50%, 15%, 0.8)';
+            ctx.fillRect(x, y, w, h);
+            // Geometric edge shapes
+            const edgeY = (y === 0) ? y + h : y;
+            const dir = (y === 0) ? -1 : 1;
+            ctx.fillStyle = 'hsla(' + ((hue + 60) % 360) + ', 60%, 25%, 0.6)';
+            ctx.beginPath();
+            ctx.moveTo(x - 4, edgeY);
+            for (let i = 0; i <= 5; i++) {
+                const px = x - 4 + ((w + 8) / 5) * i;
+                const jag = (i % 2 === 0) ? (10 + seededRand(seed, i) * 15) : (3 + seededRand(seed, i + 5) * 5);
+                ctx.lineTo(px, edgeY - dir * jag);
+            }
+            ctx.lineTo(x + w + 4, edgeY);
+            ctx.closePath();
+            ctx.fill();
+            // Glowing orbs
+            for (let i = 0; i < 3; i++) {
+                const ox2 = x + seededRand(seed, i + 20) * w;
+                const oy = (y === 0) ? y + h * 0.4 + seededRand(seed, i + 30) * h * 0.4 : y + seededRand(seed, i + 30) * h * 0.6;
+                const orbHue = (hue + i * 90) % 360;
+                const pulse = 0.3 + 0.4 * Math.sin(t * 2 + i * 2);
+                ctx.fillStyle = 'hsla(' + orbHue + ', 70%, 50%, ' + pulse + ')';
+                ctx.beginPath();
+                ctx.arc(ox2, oy, 3 + seededRand(seed, i + 40) * 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function drawParticles() {
+            for (let particle of particles) {
+                ctx.fillStyle = particle.color;
+                ctx.globalAlpha = particle.life / particle.maxLife;
+                ctx.fillRect(particle.x - particle.size / 2, particle.y - particle.size / 2, particle.size, particle.size);
+                ctx.globalAlpha = 1;
+            }
+        }
+
+        function drawHUD() {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 32px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(Math.floor(depth), 20, 50);
+
+            // Zone name announcement
+            if (lastZoneAnnounceTime < 2) {
+                ctx.font = 'bold 36px Arial';
+                ctx.textAlign = 'center';
+                const alpha = lastZoneAnnounceTime < 0.5 ? 1 : Math.max(0, (2 - lastZoneAnnounceTime) / 1.5);
+                ctx.globalAlpha = alpha;
+                ctx.fillText(zoneAnnounceText, canvas.width / 2, canvas.height / 2);
+                ctx.globalAlpha = 1;
+            }
+
+        }
+
+        function drawMenu() {
+            const cx = canvas.width / 2;
+            const cw = canvas.width;
+            const ch = canvas.height;
+
+            // Cinematic dark overlay with warm vignette
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+            ctx.fillRect(0, 0, cw, ch);
+
+            // Warm vignette (dark edges, warm center glow)
+            const vig = ctx.createRadialGradient(cx, ch * 0.4, ch * 0.15, cx, ch * 0.4, ch * 0.7);
+            vig.addColorStop(0, 'rgba(180, 120, 40, 0.08)');
+            vig.addColorStop(0.5, 'rgba(0, 0, 0, 0)');
+            vig.addColorStop(1, 'rgba(0, 0, 0, 0.5)');
+            ctx.fillStyle = vig;
+            ctx.fillRect(0, 0, cw, ch);
+
+            // Baby Astro (big, centered, with jetpack on)
+            ctx.save();
+            ctx.translate(cx, ch * 0.32);
+            ctx.translate(0, Math.sin(menuTime * 1.5) * 8);
+            ctx.scale(2.8, 2.8);
+            const wasBoost = player.boostActive;
+            player.boostActive = true;
+            const sx = player.x, sy = player.y;
+            player.x = 0; player.y = 0;
+            player.rotation = -0.08;
+            drawBaby();
+            player.x = sx; player.y = sy;
+            player.boostActive = wasBoost;
+            ctx.restore();
+
+            // Glow behind baby
+            const babyGlow = ctx.createRadialGradient(cx, ch * 0.3, 0, cx, ch * 0.3, 80);
+            babyGlow.addColorStop(0, 'rgba(245, 166, 35, 0.12)');
+            babyGlow.addColorStop(1, 'rgba(245, 166, 35, 0)');
+            ctx.fillStyle = babyGlow;
+            ctx.fillRect(0, 0, cw, ch);
+
+            ctx.textAlign = 'center';
+
+            // ── TITLE BLOCK (movie poster style) ──
+            const titleBase = ch * 0.53;
+
+            // "THE ADVENTURES OF" - small caps, wide letter spacing
+            ctx.fillStyle = '#C8A44A';
+            ctx.font = '700 ' + Math.floor(cw * 0.05) + 'px Cinzel, "Times New Roman", serif';
+            ctx.fillText('THE ADVENTURES OF', cx, titleBase);
+
+            // Decorative line under "THE ADVENTURES OF"
+            const lineW = cw * 0.45;
+            ctx.strokeStyle = 'rgba(200, 164, 74, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cx - lineW / 2, titleBase + 8);
+            ctx.lineTo(cx + lineW / 2, titleBase + 8);
+            ctx.stroke();
+            // Small diamond in center of line
+            ctx.fillStyle = '#C8A44A';
+            ctx.save();
+            ctx.translate(cx, titleBase + 8);
+            ctx.rotate(Math.PI / 4);
+            ctx.fillRect(-2.5, -2.5, 5, 5);
+            ctx.restore();
+
+            // "BABY" - massive, bold serif
+            const babySize = Math.floor(cw * 0.2);
+            ctx.font = '900 ' + babySize + 'px Cinzel, Playfair Display, "Times New Roman", serif';
+
+            // Text shadow / glow
+            ctx.fillStyle = 'rgba(200, 160, 60, 0.15)';
+            ctx.fillText('BABY', cx + 1, titleBase + babySize * 0.82 + 2);
+
+            // Main text with gold gradient
+            const goldGrad = ctx.createLinearGradient(cx - cw * 0.3, titleBase + 20, cx + cw * 0.3, titleBase + babySize);
+            goldGrad.addColorStop(0, '#E8D088');
+            goldGrad.addColorStop(0.3, '#FFFDF0');
+            goldGrad.addColorStop(0.5, '#F5DFA0');
+            goldGrad.addColorStop(0.7, '#FFFEF5');
+            goldGrad.addColorStop(1, '#D4B060');
+            ctx.fillStyle = goldGrad;
+            ctx.fillText('BABY', cx, titleBase + babySize * 0.82);
+
+            // "ASTRO" - same size, stacked below
+            const astroY = titleBase + babySize * 0.82 + babySize * 0.85;
+            ctx.fillStyle = 'rgba(200, 160, 60, 0.15)';
+            ctx.fillText('ASTRO', cx + 1, astroY + 2);
+            ctx.fillStyle = goldGrad;
+            ctx.fillText('ASTRO', cx, astroY);
+
+            // Thin decorative line below ASTRO
+            const line2Y = astroY + 14;
+            ctx.strokeStyle = 'rgba(200, 164, 74, 0.3)';
+            ctx.lineWidth = 0.5;
+            ctx.beginPath();
+            ctx.moveTo(cx - lineW * 0.6, line2Y);
+            ctx.lineTo(cx + lineW * 0.6, line2Y);
+            ctx.stroke();
+
+            // Tagline
+            ctx.fillStyle = 'rgba(200, 190, 170, 0.6)';
+            ctx.font = 'italic ' + Math.floor(cw * 0.035) + 'px "Times New Roman", Georgia, serif';
+            ctx.fillText('Born to explore.', cx, line2Y + 22);
+
+            // ── TAP TO START ──
+            const startY = ch * 0.88;
+            ctx.font = '700 ' + Math.floor(cw * 0.04) + 'px Cinzel, "Times New Roman", serif';
+            const blinkAlpha = (Math.sin(menuTime * 3) + 1) / 2;
+            ctx.globalAlpha = blinkAlpha * 0.6 + 0.4;
+            ctx.fillStyle = '#C8A44A';
+            ctx.fillText('TAP TO START', cx, startY);
+            ctx.globalAlpha = 1;
+
+            // ── BEST SCORE (subtle, bottom) ──
+            if (bestDepth > 0) {
+                ctx.font = Math.floor(cw * 0.032) + 'px "Times New Roman", Georgia, serif';
+                ctx.fillStyle = 'rgba(180, 170, 150, 0.4)';
+                ctx.fillText('Best Depth: ' + Math.floor(bestDepth), cx, ch - 20);
+            }
+        }
+
+        function drawDeath() {
+            const elapsed = deathTime;
+            const cx = canvas.width / 2;
+
+            // Flash on death
+            if (elapsed < 0.4) {
+                ctx.globalAlpha = 1 - elapsed * 2.5;
+                ctx.fillStyle = '#FF6B9D';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.globalAlpha = 1;
+            }
+
+            // Dark overlay (fade in)
+            const overlayAlpha = Math.min(elapsed * 2, 0.88);
+            ctx.fillStyle = 'rgba(5, 5, 15, ' + overlayAlpha + ')';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Wait for overlay before showing content
+            if (elapsed < 0.4) return;
+
+            const contentAlpha = Math.min((elapsed - 0.4) * 3, 1);
+            ctx.globalAlpha = contentAlpha;
+
+            // Count-up animation
+            const countDuration = 1.2;
+            const countElapsed = Math.max(0, elapsed - 0.5);
+            const countProgress = Math.min(countElapsed / countDuration, 1);
+            // Ease out
+            const eased = 1 - Math.pow(1 - countProgress, 3);
+            const displayDepth = Math.floor(depth * eased);
+
+            ctx.textAlign = 'center';
+
+            if (isNewBest) {
+                // ============================================
+                // NEW HIGH SCORE SCREEN (shareable / screenshottable)
+                // ============================================
+
+                // Subtle animated glow behind the card
+                const glowPulse = 0.3 + 0.15 * Math.sin(elapsed * 2);
+                const glow = ctx.createRadialGradient(cx, canvas.height * 0.42, 0, cx, canvas.height * 0.42, canvas.width * 0.6);
+                glow.addColorStop(0, 'rgba(245, 166, 35, ' + glowPulse + ')');
+                glow.addColorStop(0.5, 'rgba(245, 166, 35, 0.05)');
+                glow.addColorStop(1, 'rgba(245, 166, 35, 0)');
+                ctx.fillStyle = glow;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // "NEW RECORD" banner
+                const bannerY = canvas.height * 0.12;
+                ctx.fillStyle = '#F5A623';
+                ctx.font = 'bold 14px Arial';
+                ctx.letterSpacing = '6px';
+                ctx.fillText('★  N E W   R E C O R D  ★', cx, bannerY);
+
+                // Game title
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.font = '11px Arial';
+                ctx.fillText('THE ADVENTURES OF', cx, bannerY + 28);
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 22px Arial';
+                ctx.fillText('Baby Astro!', cx, bannerY + 52);
+
+                // Draw Baby Astro in the center (larger, celebratory)
+                const babyDrawY = canvas.height * 0.33;
+                ctx.save();
+                ctx.translate(cx, babyDrawY);
+                // Gentle float
+                ctx.translate(0, Math.sin(elapsed * 2) * 4);
+                ctx.scale(2.2, 2.2);
+                // Force boost active for flame effect
+                const wasBoost = player.boostActive;
+                player.boostActive = true;
+                const savedX = player.x;
+                const savedY = player.y;
+                player.x = 0;
+                player.y = 0;
+                player.rotation = -0.1;
+                drawBaby();
+                player.x = savedX;
+                player.y = savedY;
+                player.boostActive = wasBoost;
+                ctx.restore();
+
+                // Stats card
+                const cardTop = canvas.height * 0.5;
+                const cardW = canvas.width * 0.75;
+                const cardH = canvas.height * 0.26;
+                const cardX = cx - cardW / 2;
+
+                // Card background
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+                roundRect(ctx, cardX, cardTop, cardW, cardH, 12);
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(245, 166, 35, 0.3)';
+                ctx.lineWidth = 1;
+                roundRect(ctx, cardX, cardTop, cardW, cardH, 12);
+                ctx.stroke();
+
+                // Depth (big number)
+                const depthY = cardTop + 40;
+                ctx.fillStyle = '#F5A623';
+                ctx.font = 'bold 48px Arial';
+                ctx.fillText(displayDepth, cx, depthY + 10);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.font = '11px Arial';
+                ctx.fillText('DEPTH REACHED', cx, depthY + 34);
+
+                // Divider line
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(cardX + 20, depthY + 52);
+                ctx.lineTo(cardX + cardW - 20, depthY + 52);
+                ctx.stroke();
+
+                // Zone row
+                const rowY = depthY + 80;
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 18px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(deathZoneName, cx, rowY);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.font = '10px Arial';
+                ctx.fillText('ZONE', cx, rowY + 16);
+
+                // Previous best
+                const prevBestY = cardTop + cardH + 22;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.font = '12px Arial';
+                const prevBest = Math.floor(bestDepth) === Math.floor(depth) ? Math.floor(depth - 1) : Math.floor(bestDepth);
+                if (prevBest > 0) {
+                    ctx.fillText('Previous best: ' + prevBest, cx, prevBestY);
+                }
+
+                // Tap to retry
+                if (!deathInputLocked) {
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = '16px Arial';
+                    const retryAlpha2 = (Math.sin(elapsed * 3) + 1) / 2;
+                    ctx.globalAlpha = contentAlpha * (retryAlpha2 * 0.6 + 0.4);
+                    ctx.fillText('TAP TO PLAY AGAIN', cx, canvas.height * 0.88);
+                }
+
+            } else {
+                // ============================================
+                // NORMAL GAME OVER SCREEN (no new record)
+                // ============================================
+
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 32px Arial';
+                ctx.fillText('GAME OVER', cx, canvas.height * 0.2);
+
+                // Draw Baby Astro smaller
+                ctx.save();
+                ctx.translate(cx, canvas.height * 0.33);
+                ctx.translate(0, Math.sin(elapsed * 1.5) * 3);
+                ctx.scale(1.6, 1.6);
+                const savedX2 = player.x;
+                const savedY2 = player.y;
+                player.x = 0;
+                player.y = 0;
+                player.rotation = 0.2; // tilted, sad
+                drawBaby();
+                player.x = savedX2;
+                player.y = savedY2;
+                ctx.restore();
+
+                // Stats
+                const statY = canvas.height * 0.5;
+
+                // Depth
+                ctx.fillStyle = '#FFFFFF';
+                ctx.font = 'bold 36px Arial';
+                ctx.fillText(displayDepth, cx, statY);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.font = '11px Arial';
+                ctx.fillText('DEPTH', cx, statY + 18);
+
+                // Zone
+                ctx.fillStyle = '#CCCCCC';
+                ctx.font = '16px Arial';
+                ctx.fillText(deathZoneName, cx, statY + 48);
+
+                // Best score
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.font = '13px Arial';
+                ctx.fillText('Best: ' + Math.floor(bestDepth), cx, statY + 78);
+
+                // Tap to retry
+                if (!deathInputLocked) {
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = '16px Arial';
+                    const retryAlpha3 = (Math.sin(elapsed * 3) + 1) / 2;
+                    ctx.globalAlpha = contentAlpha * (retryAlpha3 * 0.6 + 0.4);
+                    ctx.fillText('TAP TO PLAY AGAIN', cx, canvas.height * 0.88);
+                }
+            }
+
+            ctx.globalAlpha = 1;
+        }
+
+        // Main game loop
+        let lastTime = Date.now();
+
+        function gameLoop() {
+            const now = Date.now();
+            const deltaTime = Math.min((now - lastTime) / 1000, 0.016);
+            lastTime = now;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            if (gameState === GAME_STATE.MENU) {
+                drawBackground();
+                drawMenu();
+                if (inputActive) {
+                    startNewGame();
+                    inputActive = false;
+                }
+            } else if (gameState === GAME_STATE.PLAYING) {
+                update(deltaTime);
+                drawBackground();
+                drawObstacles();
+                drawParticles();
+                drawBaby();
+                drawHUD();
+            } else if (gameState === GAME_STATE.DEAD) {
+                deathTime += deltaTime;
+                drawBackground();
+                drawObstacles();
+                drawParticles();
+                drawBaby();
+                drawDeath();
+                if (inputActive && !deathInputLocked) {
+                    startNewGame();
+                    inputActive = false;
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game
+        gameLoop();
+
+        // Prevent scrolling
+        document.body.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+        }, { passive: false });
+    </script>
+</body>
+</html>
