@@ -1098,77 +1098,49 @@
                 const type = obstacle.type;
                 const cx = ox + ow / 2;
 
+                // Clip top obstacle so nothing bleeds past the gap edge
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(ox - 20, -5, ow + 40, obstacle.topY + 5);
+                ctx.clip();
+
                 switch (type) {
-
-                // ── ZONE 1: Clouds ──
-                case 'cloud':
-                    // Top cloud cluster
-                    drawCloudFormation(ox, 0, ow, obstacle.topY, s);
-                    // Bottom cloud cluster
-                    drawCloudFormation(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50);
-                    break;
-
-                // ── ZONE 2: Satellite / Space Junk ──
-                case 'satellite':
-                    drawMetalBeam(ox, 0, ow, obstacle.topY, s, '#8899AA', '#667788');
-                    drawMetalBeam(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50, '#8899AA', '#667788');
-                    // Solar panels at gap edges
-                    drawSolarPanel(cx, obstacle.topY, ow, s);
-                    drawSolarPanel(cx, obstacle.bottomY, ow, s + 30, true);
-                    break;
-
-                // ── ZONE 3: Moon / Crater rock ──
-                case 'crater':
-                    drawRockFormation(ox, 0, ow, obstacle.topY, s, '#707070', '#585858', '#4A4A4A');
-                    drawRockFormation(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50, '#707070', '#585858', '#4A4A4A');
-                    break;
-
-                // ── ZONE 4: Mars canyon ──
-                case 'canyon':
-                    drawRockFormation(ox, 0, ow, obstacle.topY, s, '#B85A3A', '#8B4513', '#6B3410');
-                    drawRockFormation(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50, '#B85A3A', '#8B4513', '#6B3410');
-                    // Dust particles near gap
-                    drawDustParticles(ox, obstacle.topY, obstacle.bottomY, ow, s);
-                    break;
-
-                // ── ZONE 5: Asteroids ──
-                case 'asteroid':
-                    drawAsteroidCluster(ox, 0, ow, obstacle.topY, s);
-                    drawAsteroidCluster(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50);
-                    break;
-
-                // ── ZONE 6: Jupiter gas bands ──
-                case 'gas':
-                    drawGasBands(ox, 0, ow, obstacle.topY, s, '#CC7722', '#8B4513', '#AA5500');
-                    drawGasBands(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50, '#CC7722', '#8B4513', '#AA5500');
-                    // Lightning near gap
-                    drawLightning(cx, obstacle.topY, 15, s);
-                    break;
-
-                // ── ZONE 7: Saturn ring debris / ice ──
-                case 'ring':
-                    drawIceFormation(ox, 0, ow, obstacle.topY, s);
-                    drawIceFormation(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50);
-                    break;
-
-                // ── ZONE 8: Deep space / void ──
-                case 'void':
-                    drawVoidBarrier(ox, 0, ow, obstacle.topY, s);
-                    drawVoidBarrier(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50);
-                    break;
-
-                // ── ZONE 9: Unknown / Abstract ──
-                case 'unknown':
-                    drawUnknownBarrier(ox, 0, ow, obstacle.topY, s);
-                    drawUnknownBarrier(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50);
-                    break;
+                case 'cloud': drawCloudFormation(ox, 0, ow, obstacle.topY, s); break;
+                case 'satellite': drawMetalBeam(ox, 0, ow, obstacle.topY, s, '#8899AA', '#667788'); break;
+                case 'crater': drawRockFormation(ox, 0, ow, obstacle.topY, s, '#707070', '#585858', '#4A4A4A'); break;
+                case 'canyon': drawRockFormation(ox, 0, ow, obstacle.topY, s, '#B85A3A', '#8B4513', '#6B3410'); break;
+                case 'asteroid': drawAsteroidCluster(ox, 0, ow, obstacle.topY, s); break;
+                case 'gas': drawGasBands(ox, 0, ow, obstacle.topY, s, '#CC7722', '#8B4513', '#AA5500'); break;
+                case 'ring': drawIceFormation(ox, 0, ow, obstacle.topY, s); break;
+                case 'void': drawVoidBarrier(ox, 0, ow, obstacle.topY, s); break;
+                case 'unknown': drawUnknownBarrier(ox, 0, ow, obstacle.topY, s); break;
                 }
+                ctx.restore();
 
-                // Gap edge glow for visibility on all zones
-                ctx.shadowColor = 'rgba(255,255,255,0.6)';
-                ctx.shadowBlur = 8;
-                ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+                // Clip bottom obstacle so nothing bleeds past the gap edge
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(ox - 20, obstacle.bottomY, ow + 40, canvas.height - obstacle.bottomY + 5);
+                ctx.clip();
+
+                switch (type) {
+                case 'cloud': drawCloudFormation(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50); break;
+                case 'satellite': drawMetalBeam(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50, '#8899AA', '#667788'); break;
+                case 'crater': drawRockFormation(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50, '#707070', '#585858', '#4A4A4A'); break;
+                case 'canyon': drawRockFormation(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50, '#B85A3A', '#8B4513', '#6B3410'); break;
+                case 'asteroid': drawAsteroidCluster(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50); break;
+                case 'gas': drawGasBands(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50, '#CC7722', '#8B4513', '#AA5500'); break;
+                case 'ring': drawIceFormation(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50); break;
+                case 'void': drawVoidBarrier(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50); break;
+                case 'unknown': drawUnknownBarrier(ox, obstacle.bottomY, ow, canvas.height - obstacle.bottomY, s + 50); break;
+                }
+                ctx.restore();
+
+                // Clean flat edge line at gap boundaries
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)';
                 ctx.lineWidth = 2;
+                ctx.shadowColor = 'rgba(255,255,255,0.6)';
+                ctx.shadowBlur = 6;
                 // Top obstacle bottom edge
                 ctx.beginPath();
                 ctx.moveTo(ox - 2, obstacle.topY);
