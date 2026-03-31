@@ -273,9 +273,13 @@
             const keyData = encoder.encode(HMAC_SECRET);
             const key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
             const signature = await crypto.subtle.sign('HMAC', key, data);
-            const hashArray = Array.from(new Uint8Array(signature));
-            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-            return btoa(hashHex);
+            // Base64-encode raw bytes (must match server's atob → bytes decode)
+            const bytes = new Uint8Array(signature);
+            let binary = '';
+            for (let i = 0; i < bytes.length; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return btoa(binary);
         }
 
         // Fetch leaderboard from Supabase
@@ -302,7 +306,7 @@
                 depth: Math.floor(depth),
                 zone: deathZoneName,
                 session_token: sessionToken,
-                tap_count: tapCount,
+                taps: tapCount,
                 time_played: Math.floor(timePlayed),
                 signature: signature,
                 checkpoints: checkpoints
@@ -641,6 +645,7 @@
         let playerNameForScore = '';
         let nameInputRect = { x: 0, y: 0, w: 0, h: 0 };
         let submitButtonRect = { x: 0, y: 0, w: 0, h: 0 };
+        let playAgainButtonRect = { x: 0, y: 0, w: 0, h: 0 };
 
         function die() {
             gameState = GAME_STATE.DEAD;
@@ -656,6 +661,7 @@
             deathScreenPhase = 'stats';
             deathView = 'main';
             deathLeaderboardButtonRect = { x: 0, y: 0, w: 0, h: 0 };
+            playAgainButtonRect = { x: 0, y: 0, w: 0, h: 0 };
             playerNameForScore = '';
             scoreSubmitted = false;
 
@@ -1933,6 +1939,26 @@
                     ctx.fillText('SUBMIT SCORE', cx, submitY + 20);
 
                     submitButtonRect = { x: submitX, y: submitY, w: submitW, h: submitH };
+
+                    // Play Again button (skip submission)
+                    const skipY2 = submitY + submitH + 12;
+                    const skipW2 = canvas.width * 0.5;
+                    const skipH2 = 28;
+                    const skipX2 = cx - skipW2 / 2;
+
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+                    roundRect(ctx, skipX2, skipY2, skipW2, skipH2, 6);
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.lineWidth = 1;
+                    roundRect(ctx, skipX2, skipY2, skipW2, skipH2, 6);
+                    ctx.stroke();
+
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                    ctx.font = '13px Arial';
+                    ctx.fillText('PLAY AGAIN', cx, skipY2 + 18);
+
+                    playAgainButtonRect = { x: skipX2, y: skipY2, w: skipW2, h: skipH2 };
                 }
 
                 // Post-submission on new best screen
@@ -1971,11 +1997,25 @@
                     ctx.fillText('VIEW LEADERBOARD', cx, dlbBtnY2 + 20);
                     deathLeaderboardButtonRect = { x: dlbBtnX2, y: dlbBtnY2, w: dlbBtnW2, h: dlbBtnH2 };
 
+                    // Play Again button
+                    const paY2 = canvas.height * 0.88;
+                    const paW2 = canvas.width * 0.5;
+                    const paH2 = 32;
+                    const paX2 = cx - paW2 / 2;
+
+                    ctx.globalAlpha = contentAlpha;
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+                    roundRect(ctx, paX2, paY2, paW2, paH2, 8);
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.lineWidth = 1;
+                    roundRect(ctx, paX2, paY2, paW2, paH2, 8);
+                    ctx.stroke();
+
                     ctx.fillStyle = '#FFFFFF';
-                    ctx.font = '16px Arial';
-                    const retryAlpha2 = (Math.sin(elapsed * 3) + 1) / 2;
-                    ctx.globalAlpha = contentAlpha * (retryAlpha2 * 0.6 + 0.4);
-                    ctx.fillText('TAP TO PLAY AGAIN', cx, canvas.height * 0.92);
+                    ctx.font = 'bold 14px Arial';
+                    ctx.fillText('PLAY AGAIN', cx, paY2 + 21);
+                    playAgainButtonRect = { x: paX2, y: paY2, w: paW2, h: paH2 };
                 }
 
             } else {
@@ -2082,6 +2122,26 @@
                     ctx.fillText('SUBMIT SCORE', cx, submitY + 20);
 
                     submitButtonRect = { x: submitX, y: submitY, w: submitW, h: submitH };
+
+                    // Play Again button (skip submission)
+                    const skipY = submitY + submitH + 14;
+                    const skipW = canvas.width * 0.5;
+                    const skipH = 30;
+                    const skipX = cx - skipW / 2;
+
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.06)';
+                    roundRect(ctx, skipX, skipY, skipW, skipH, 6);
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.lineWidth = 1;
+                    roundRect(ctx, skipX, skipY, skipW, skipH, 6);
+                    ctx.stroke();
+
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                    ctx.font = '13px Arial';
+                    ctx.fillText('PLAY AGAIN', cx, skipY + 20);
+
+                    playAgainButtonRect = { x: skipX, y: skipY, w: skipW, h: skipH };
                 }
 
                 // Post-submission state
@@ -2155,11 +2215,25 @@
                     ctx.fillText('VIEW LEADERBOARD', cx, dlbBtnY + 20);
                     deathLeaderboardButtonRect = { x: dlbBtnX, y: dlbBtnY, w: dlbBtnW, h: dlbBtnH };
 
+                    // Play Again button
+                    const paY3 = canvas.height * 0.88;
+                    const paW3 = canvas.width * 0.5;
+                    const paH3 = 32;
+                    const paX3 = cx - paW3 / 2;
+
+                    ctx.globalAlpha = contentAlpha;
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+                    roundRect(ctx, paX3, paY3, paW3, paH3, 8);
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                    ctx.lineWidth = 1;
+                    roundRect(ctx, paX3, paY3, paW3, paH3, 8);
+                    ctx.stroke();
+
                     ctx.fillStyle = '#FFFFFF';
-                    ctx.font = '16px Arial';
-                    const retryAlpha3 = (Math.sin(elapsed * 3) + 1) / 2;
-                    ctx.globalAlpha = contentAlpha * (retryAlpha3 * 0.6 + 0.4);
-                    ctx.fillText('TAP TO PLAY AGAIN', cx, canvas.height * 0.92);
+                    ctx.font = 'bold 14px Arial';
+                    ctx.fillText('PLAY AGAIN', cx, paY3 + 21);
+                    playAgainButtonRect = { x: paX3, y: paY3, w: paW3, h: paH3 };
                 }
             }
 
@@ -2207,11 +2281,8 @@
                 drawParticles();
                 drawBaby();
                 drawDeath();
-                // Only allow restart after score submitted
-                if (inputActive && !deathInputLocked && (deathScreenPhase === 'submitted' || scoreSubmitted)) {
-                    startNewGame();
-                    inputActive = false;
-                }
+                // Restart only happens via PLAY AGAIN button in handleCanvasClick
+                inputActive = false;
             }
 
             requestAnimationFrame(gameLoop);
@@ -2246,8 +2317,16 @@
                 }
                 return false;
             }
-            // Death state: leaderboard and back buttons
+            // Death state: leaderboard, back, and play again buttons
             if (gameState === GAME_STATE.DEAD) {
+                // Play Again button (skip submission)
+                if (deathView === 'main' && playAgainButtonRect.x &&
+                    x >= playAgainButtonRect.x && x <= playAgainButtonRect.x + playAgainButtonRect.w &&
+                    y >= playAgainButtonRect.y && y <= playAgainButtonRect.y + playAgainButtonRect.h) {
+                    startNewGame();
+                    inputActive = false;
+                    return true;
+                }
                 if (deathView === 'main' && deathLeaderboardButtonRect.x &&
                     x >= deathLeaderboardButtonRect.x && x <= deathLeaderboardButtonRect.x + deathLeaderboardButtonRect.w &&
                     y >= deathLeaderboardButtonRect.y && y <= deathLeaderboardButtonRect.y + deathLeaderboardButtonRect.h) {
