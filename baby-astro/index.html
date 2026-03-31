@@ -1963,27 +1963,23 @@
 
                 // Post-submission on new best screen
                 if (deathScreenPhase === 'submitted' || scoreSubmitted) {
+                    const subY = prevBestY + 24;
                     ctx.fillStyle = '#F5A623';
                     ctx.font = 'bold 16px Arial';
                     ctx.globalAlpha = contentAlpha;
-                    const subY = prevBestY + 24;
                     ctx.fillText('Thanks for submitting!', cx, subY);
                     if (playerRank > 0) {
                         ctx.fillStyle = '#FFFFFF';
                         ctx.font = 'bold 14px Arial';
                         ctx.fillText('You ranked #' + playerRank + ' worldwide', cx, subY + 22);
                     }
-                }
 
-                // View Leaderboard + Tap to retry (only after submitted)
-                if (!deathInputLocked && (deathScreenPhase === 'submitted' || scoreSubmitted)) {
                     // View Leaderboard button
-                    const dlbBtnY2 = canvas.height * 0.82;
+                    const dlbBtnY2 = subY + 50;
                     const dlbBtnW2 = canvas.width * 0.55;
-                    const dlbBtnH2 = 30;
+                    const dlbBtnH2 = 34;
                     const dlbBtnX2 = cx - dlbBtnW2 / 2;
 
-                    ctx.globalAlpha = contentAlpha;
                     ctx.fillStyle = 'rgba(200, 164, 74, 0.12)';
                     roundRect(ctx, dlbBtnX2, dlbBtnY2, dlbBtnW2, dlbBtnH2, 8);
                     ctx.fill();
@@ -1993,17 +1989,16 @@
                     ctx.stroke();
 
                     ctx.fillStyle = '#C8A44A';
-                    ctx.font = 'bold 12px Arial';
-                    ctx.fillText('VIEW LEADERBOARD', cx, dlbBtnY2 + 20);
+                    ctx.font = 'bold 13px Arial';
+                    ctx.fillText('VIEW LEADERBOARD', cx, dlbBtnY2 + 22);
                     deathLeaderboardButtonRect = { x: dlbBtnX2, y: dlbBtnY2, w: dlbBtnW2, h: dlbBtnH2 };
 
                     // Play Again button
-                    const paY2 = canvas.height * 0.88;
-                    const paW2 = canvas.width * 0.5;
-                    const paH2 = 32;
+                    const paY2 = dlbBtnY2 + dlbBtnH2 + 14;
+                    const paW2 = canvas.width * 0.55;
+                    const paH2 = 34;
                     const paX2 = cx - paW2 / 2;
 
-                    ctx.globalAlpha = contentAlpha;
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
                     roundRect(ctx, paX2, paY2, paW2, paH2, 8);
                     ctx.fill();
@@ -2014,7 +2009,7 @@
 
                     ctx.fillStyle = '#FFFFFF';
                     ctx.font = 'bold 14px Arial';
-                    ctx.fillText('PLAY AGAIN', cx, paY2 + 21);
+                    ctx.fillText('PLAY AGAIN', cx, paY2 + 22);
                     playAgainButtonRect = { x: paX2, y: paY2, w: paW2, h: paH2 };
                 }
 
@@ -2063,8 +2058,8 @@
                 ctx.font = '13px Arial';
                 ctx.fillText('Best: ' + Math.floor(bestDepth), cx, statY + 78);
 
-                // Show leaderboard submission UI
-                if (deathScreenPhase === 'stats' && elapsed > 1.5) {
+                // Show leaderboard submission UI (only before submitting)
+                if (deathScreenPhase === 'stats' && !scoreSubmitted && elapsed > 1.5) {
                     // Show message to submit name
                     ctx.fillStyle = '#FFFFFF';
                     ctx.font = '14px Arial';
@@ -2077,8 +2072,8 @@
                     }
                 }
 
-                // Name input and submit button (appears after delay)
-                if (elapsed > 1.5 && !deathInputLocked) {
+                // Name input and submit button (only before submitting)
+                if (elapsed > 1.5 && !deathInputLocked && !scoreSubmitted && deathScreenPhase !== 'submitted') {
                     const inputY = statY + 150;
                     const inputW = canvas.width * 0.6;
                     const inputH = 36;
@@ -2150,55 +2145,18 @@
                     ctx.fillStyle = '#F5A623';
                     ctx.font = 'bold 20px Arial';
                     ctx.globalAlpha = contentAlpha;
-                    ctx.fillText('Thanks for submitting!', cx, statY + 120);
+                    ctx.fillText('Thanks for submitting!', cx, statY + 115);
 
                     if (playerRank > 0) {
                         ctx.fillStyle = '#FFFFFF';
                         ctx.font = 'bold 16px Arial';
-                        ctx.fillText('You ranked #' + playerRank + ' worldwide', cx, statY + 148);
+                        ctx.fillText('You ranked #' + playerRank + ' worldwide', cx, statY + 145);
                     }
 
-                    // Show top 10 leaderboard
-                    if (leaderboardData.length > 0) {
-                        ctx.fillStyle = '#C8A44A';
-                        ctx.font = 'bold 12px Arial';
-                        ctx.fillText('TOP 10 WORLDWIDE', cx, statY + 180);
-
-                        // Decorative line
-                        ctx.strokeStyle = 'rgba(200, 164, 74, 0.3)';
-                        ctx.lineWidth = 1;
-                        ctx.beginPath();
-                        ctx.moveTo(cx - canvas.width * 0.25, statY + 186);
-                        ctx.lineTo(cx + canvas.width * 0.25, statY + 186);
-                        ctx.stroke();
-
-                        ctx.font = '11px Arial';
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-                        ctx.textAlign = 'left';
-                        const leaderboardStartX = cx - canvas.width * 0.3;
-                        const leaderboardStartY = statY + 200;
-                        for (let i = 0; i < Math.min(10, leaderboardData.length); i++) {
-                            const entry = leaderboardData[i];
-                            // Highlight the player's entry
-                            if (entry.player_name === playerNameForScore && Math.floor(entry.depth) === Math.floor(depth)) {
-                                ctx.fillStyle = '#F5A623';
-                                ctx.font = 'bold 11px Arial';
-                            } else {
-                                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-                                ctx.font = '11px Arial';
-                            }
-                            ctx.fillText(`${i + 1}. ${entry.player_name} - ${Math.floor(entry.depth)}`, leaderboardStartX, leaderboardStartY + i * 16);
-                        }
-                        ctx.textAlign = 'center';
-                    }
-                }
-
-                // Tap to retry + view leaderboard
-                if (!deathInputLocked && deathScreenPhase === 'submitted') {
                     // View Leaderboard button
-                    const dlbBtnY = canvas.height * 0.82;
+                    const dlbBtnY = statY + 175;
                     const dlbBtnW = canvas.width * 0.55;
-                    const dlbBtnH = 30;
+                    const dlbBtnH = 34;
                     const dlbBtnX = cx - dlbBtnW / 2;
 
                     ctx.globalAlpha = contentAlpha;
@@ -2211,17 +2169,16 @@
                     ctx.stroke();
 
                     ctx.fillStyle = '#C8A44A';
-                    ctx.font = 'bold 12px Arial';
-                    ctx.fillText('VIEW LEADERBOARD', cx, dlbBtnY + 20);
+                    ctx.font = 'bold 13px Arial';
+                    ctx.fillText('VIEW LEADERBOARD', cx, dlbBtnY + 22);
                     deathLeaderboardButtonRect = { x: dlbBtnX, y: dlbBtnY, w: dlbBtnW, h: dlbBtnH };
 
                     // Play Again button
-                    const paY3 = canvas.height * 0.88;
-                    const paW3 = canvas.width * 0.5;
-                    const paH3 = 32;
+                    const paY3 = dlbBtnY + dlbBtnH + 14;
+                    const paW3 = canvas.width * 0.55;
+                    const paH3 = 34;
                     const paX3 = cx - paW3 / 2;
 
-                    ctx.globalAlpha = contentAlpha;
                     ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
                     roundRect(ctx, paX3, paY3, paW3, paH3, 8);
                     ctx.fill();
@@ -2232,7 +2189,7 @@
 
                     ctx.fillStyle = '#FFFFFF';
                     ctx.font = 'bold 14px Arial';
-                    ctx.fillText('PLAY AGAIN', cx, paY3 + 21);
+                    ctx.fillText('PLAY AGAIN', cx, paY3 + 22);
                     playAgainButtonRect = { x: paX3, y: paY3, w: paW3, h: paH3 };
                 }
             }
