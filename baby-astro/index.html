@@ -53,11 +53,19 @@
             display: none;
             z-index: 100;
         }
+
+        #playerNameInput {
+            position: absolute;
+            opacity: 0;
+            pointer-events: auto;
+            z-index: 101;
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <canvas id="gameCanvas"></canvas>
+        <input type="text" id="playerNameInput" maxlength="20" placeholder="Enter name">
     </div>
 
     <script>
@@ -206,6 +214,17 @@
         let depth = 0;
         let bestDepth = localStorage.getItem('deepSpaceBestDepth') || 0;
 
+        // Leaderboard and anti-cheat variables
+        const LEADERBOARD_URL = 'https://ouffzncoummahbztybsy.supabase.co/functions/v1/submit-score';
+        const HMAC_SECRET = 'baby-astro-secret-2026';
+        let leaderboardData = [];
+        let sessionToken = '';
+        let tapCount = 0;
+        let gameStartTime = 0;
+        let checkpoints = [];
+        let playerRank = -1;
+        let scoreSubmitted = false;
+
         // Player object
         const player = {
             x: canvas.width * 0.25,
@@ -241,8 +260,72 @@
             return ZONES.find(z => d >= z.depthRange[0] && d <= z.depthRange[1]);
         }
 
+        // HMAC-SHA256 signing function for anti-cheat
+        async function signScore(sessionToken, depth, zone, taps, timePlayed) {
+            const message = `${sessionToken}:${depth}:${zone}:${taps}:${Math.floor(timePlayed)}`;
+            const encoder = new TextEncoder();
+            const data = encoder.encode(message);
+            const keyData = encoder.encode(HMAC_SECRET);
+            const key = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+            const signature = await crypto.subtle.sign('HMAC', key, data);
+            const hashArray = Array.from(new Uint8Array(signature));
+            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+            return btoa(hashHex);
+        }
+
+        // Fetch leaderboard from Supabase
+        async function fetchLeaderboard() {
+            try {
+                const response = await fetch(LEADERBOARD_URL);
+                const data = await response.json();
+                leaderboardData = data.leaderboard || [];
+            } catch (error) {
+                console.error('Failed to fetch leaderboard:', error);
+            }
+        }
+
+        // Submit score to leaderboard
+        async function submitScore(playerName) {
+            if (scoreSubmitted) return;
+            scoreSubmitted = true;
+
+            const timePlayed = (Date.now() - gameStartTime) / 1000;
+            const signature = await signScore(sessionToken, Math.floor(depth), deathZoneName, tapCount, timePlayed);
+
+            const payload = {
+                player_name: playerName,
+                depth: Math.floor(depth),
+                zone: deathZoneName,
+                session_token: sessionToken,
+                tap_count: tapCount,
+                time_played: Math.floor(timePlayed),
+                signature: signature,
+                checkpoints: checkpoints
+            };
+
+            try {
+                const response = await fetch(LEADERBOARD_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                if (result.rank) {
+                    playerRank = result.rank;
+                }
+                // Refresh leaderboard after submission
+                await fetchLeaderboard();
+            } catch (error) {
+                console.error('Failed to submit score:', error);
+                scoreSubmitted = false;
+            }
+        }
+
         function handleInput() {
             inputActive = true;
+            if (gameState === GAME_STATE.PLAYING) {
+                tapCount++;
+            }
         }
 
         function resetInput() {
@@ -512,6 +595,12 @@
                 if (!obstacle.passed && player.x > obstacle.x + obstacle.width) {
                     obstacle.passed = true;
                     depth++;
+
+                    // Log checkpoint every 10 levels
+                    if (depth % 10 === 0) {
+                        const elapsed = Date.now() - gameStartTime;
+                        checkpoints.push({ depth, t: elapsed });
+                    }
                 }
             }
 
@@ -540,6 +629,10 @@
         let isNewBest = false;
         let deathZoneName = '';
         let deathInputLocked = false;
+        let deathScreenPhase = 'stats'; // 'stats', 'nameInput', 'submitted'
+        let playerNameForScore = '';
+        let nameInputRect = { x: 0, y: 0, w: 0, h: 0 };
+        let submitButtonRect = { x: 0, y: 0, w: 0, h: 0 };
 
         function die() {
             gameState = GAME_STATE.DEAD;
@@ -552,6 +645,9 @@
 
             deathZoneName = currentZone.name;
             isNewBest = depth > bestDepth;
+            deathScreenPhase = 'stats';
+            playerNameForScore = '';
+            scoreSubmitted = false;
 
             if (depth > bestDepth) {
                 bestDepth = depth;
@@ -574,6 +670,14 @@
             lastZoneAnnounceTime = 999;
             zoneAnnounceText = '';
             generateObstacle();
+
+            // Initialize anti-cheat tracking
+            sessionToken = crypto.randomUUID();
+            tapCount = 0;
+            gameStartTime = Date.now();
+            checkpoints = [];
+            playerRank = -1;
+            scoreSubmitted = false;
         }
 
         // Drawing functions
@@ -1364,6 +1468,22 @@
             }
         }
 
+        function drawLeaderboard(x, y, maxEntries) {
+            const entries = leaderboardData.slice(0, maxEntries);
+            const entryHeight = 24;
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'left';
+
+            for (let i = 0; i < entries.length; i++) {
+                const entry = entries[i];
+                const entryY = y + i * entryHeight;
+                const rank = i + 1;
+                const text = `${rank}. ${entry.player_name} - ${Math.floor(entry.depth)}`;
+                ctx.fillText(text, x, entryY);
+            }
+        }
+
         function drawHUD() {
             ctx.fillStyle = '#FFFFFF';
             ctx.font = 'bold 32px Arial';
@@ -1494,6 +1614,20 @@
             ctx.fillStyle = '#C8A44A';
             ctx.fillText('TAP TO START', cx, startY);
             ctx.globalAlpha = 1;
+
+            // ── LEADERBOARD (top 10, bottom section) ──
+            if (leaderboardData.length > 0) {
+                const leaderboardY = ch * 0.7;
+                ctx.fillStyle = '#C8A44A';
+                ctx.font = 'bold ' + Math.floor(cw * 0.032) + 'px Cinzel, "Times New Roman", serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('WORLDWIDE LEADERBOARD', cx, leaderboardY);
+
+                ctx.font = Math.floor(cw * 0.025) + 'px Arial';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+                ctx.textAlign = 'center';
+                drawLeaderboard(cx - cw * 0.35, leaderboardY + 16, 10);
+            }
 
             // ── BEST SCORE (subtle, bottom) ──
             if (bestDepth > 0) {
@@ -1637,13 +1771,70 @@
                     ctx.fillText('Previous best: ' + prevBest, cx, prevBestY);
                 }
 
-                // Tap to retry
-                if (!deathInputLocked) {
+                // Leaderboard submission on new best screen too
+                if (elapsed > 1.5 && !deathInputLocked && deathScreenPhase !== 'submitted' && !scoreSubmitted) {
+                    const inputY = prevBestY + 20;
+                    const inputW = canvas.width * 0.6;
+                    const inputH = 36;
+                    const inputX = cx - inputW / 2;
+
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+                    roundRect(ctx, inputX, inputY, inputW, inputH, 8);
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(245, 166, 35, 0.3)';
+                    ctx.lineWidth = 1;
+                    roundRect(ctx, inputX, inputY, inputW, inputH, 8);
+                    ctx.stroke();
+
+                    nameInputRect = { x: inputX, y: inputY, w: inputW, h: inputH };
+
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = '16px Arial';
+                    ctx.textAlign = 'center';
+                    const displayName = playerNameForScore || 'Enter name...';
+                    ctx.fillText(displayName, cx, inputY + 24);
+
+                    const submitY = inputY + inputH + 12;
+                    const submitW = canvas.width * 0.5;
+                    const submitH = 32;
+                    const submitX = cx - submitW / 2;
+
+                    ctx.fillStyle = playerNameForScore.length > 0 ? 'rgba(245, 166, 35, 0.8)' : 'rgba(150, 150, 150, 0.5)';
+                    roundRect(ctx, submitX, submitY, submitW, submitH, 6);
+                    ctx.fill();
+                    ctx.strokeStyle = playerNameForScore.length > 0 ? '#F5A623' : '#999999';
+                    ctx.lineWidth = 1;
+                    roundRect(ctx, submitX, submitY, submitW, submitH, 6);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.fillText('SUBMIT SCORE', cx, submitY + 20);
+
+                    submitButtonRect = { x: submitX, y: submitY, w: submitW, h: submitH };
+                }
+
+                // Post-submission on new best screen
+                if (deathScreenPhase === 'submitted' || scoreSubmitted) {
+                    ctx.fillStyle = '#F5A623';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.globalAlpha = contentAlpha;
+                    const subY = prevBestY + 24;
+                    ctx.fillText('Score Submitted!', cx, subY);
+                    if (playerRank > 0) {
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.font = '13px Arial';
+                        ctx.fillText('Rank: #' + playerRank, cx, subY + 20);
+                    }
+                }
+
+                // Tap to retry (only after submitted or after 5 seconds skip)
+                if (!deathInputLocked && (deathScreenPhase === 'submitted' || scoreSubmitted)) {
                     ctx.fillStyle = '#FFFFFF';
                     ctx.font = '16px Arial';
                     const retryAlpha2 = (Math.sin(elapsed * 3) + 1) / 2;
                     ctx.globalAlpha = contentAlpha * (retryAlpha2 * 0.6 + 0.4);
-                    ctx.fillText('TAP TO PLAY AGAIN', cx, canvas.height * 0.88);
+                    ctx.fillText('TAP TO PLAY AGAIN', cx, canvas.height * 0.92);
                 }
 
             } else {
@@ -1691,8 +1882,100 @@
                 ctx.font = '13px Arial';
                 ctx.fillText('Best: ' + Math.floor(bestDepth), cx, statY + 78);
 
+                // Show leaderboard submission UI
+                if (deathScreenPhase === 'stats' && elapsed > 1.5) {
+                    // Show message to submit name
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = '14px Arial';
+                    ctx.globalAlpha = contentAlpha;
+                    ctx.fillText('Submit your score to the leaderboard!', cx, statY + 110);
+
+                    if (!deathInputLocked) {
+                        ctx.font = '13px Arial';
+                        ctx.fillText('Tap below to enter your name', cx, statY + 128);
+                    }
+                }
+
+                // Name input and submit button (appears after delay)
+                if (elapsed > 1.5 && !deathInputLocked) {
+                    const inputY = statY + 150;
+                    const inputW = canvas.width * 0.6;
+                    const inputH = 36;
+                    const inputX = cx - inputW / 2;
+
+                    // Input field background
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.08)';
+                    roundRect(ctx, inputX, inputY, inputW, inputH, 8);
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.lineWidth = 1;
+                    roundRect(ctx, inputX, inputY, inputW, inputH, 8);
+                    ctx.stroke();
+
+                    // Store name input field position for click detection
+                    nameInputRect = { x: inputX, y: inputY, w: inputW, h: inputH };
+
+                    // Display current name or placeholder
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = '16px Arial';
+                    ctx.textAlign = 'center';
+                    const displayName = playerNameForScore || 'Enter name...';
+                    ctx.fillText(displayName, cx, inputY + 24);
+
+                    // Submit button
+                    const submitY = inputY + inputH + 16;
+                    const submitW = canvas.width * 0.5;
+                    const submitH = 32;
+                    const submitX = cx - submitW / 2;
+
+                    ctx.fillStyle = playerNameForScore.length > 0 ? 'rgba(245, 166, 35, 0.8)' : 'rgba(150, 150, 150, 0.5)';
+                    roundRect(ctx, submitX, submitY, submitW, submitH, 6);
+                    ctx.fill();
+                    ctx.strokeStyle = playerNameForScore.length > 0 ? '#F5A623' : '#999999';
+                    ctx.lineWidth = 1;
+                    roundRect(ctx, submitX, submitY, submitW, submitH, 6);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = 'bold 14px Arial';
+                    ctx.fillText('SUBMIT SCORE', cx, submitY + 20);
+
+                    submitButtonRect = { x: submitX, y: submitY, w: submitW, h: submitH };
+                }
+
+                // Post-submission state
+                if (deathScreenPhase === 'submitted' || scoreSubmitted) {
+                    ctx.fillStyle = '#F5A623';
+                    ctx.font = 'bold 18px Arial';
+                    ctx.globalAlpha = contentAlpha;
+                    ctx.fillText('Score Submitted!', cx, statY + 140);
+
+                    if (playerRank > 0) {
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.font = '14px Arial';
+                        ctx.fillText('Rank: #' + playerRank, cx, statY + 165);
+                    }
+
+                    // Show top 10 leaderboard
+                    if (leaderboardData.length > 0) {
+                        ctx.fillStyle = '#C8A44A';
+                        ctx.font = 'bold 12px Arial';
+                        ctx.fillText('TOP 10 WORLDWIDE', cx, statY + 195);
+                        ctx.font = '11px Arial';
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                        ctx.textAlign = 'left';
+                        const leaderboardStartX = cx - canvas.width * 0.3;
+                        const leaderboardStartY = statY + 210;
+                        for (let i = 0; i < Math.min(10, leaderboardData.length); i++) {
+                            const entry = leaderboardData[i];
+                            ctx.fillText(`${i + 1}. ${entry.player_name} - ${Math.floor(entry.depth)}`, leaderboardStartX, leaderboardStartY + i * 16);
+                        }
+                        ctx.textAlign = 'center';
+                    }
+                }
+
                 // Tap to retry
-                if (!deathInputLocked) {
+                if (!deathInputLocked && deathScreenPhase === 'submitted') {
                     ctx.fillStyle = '#FFFFFF';
                     ctx.font = '16px Arial';
                     const retryAlpha3 = (Math.sin(elapsed * 3) + 1) / 2;
@@ -1735,7 +2018,8 @@
                 drawParticles();
                 drawBaby();
                 drawDeath();
-                if (inputActive && !deathInputLocked) {
+                // Only allow restart after score submitted
+                if (inputActive && !deathInputLocked && (deathScreenPhase === 'submitted' || scoreSubmitted)) {
                     startNewGame();
                     inputActive = false;
                 }
@@ -1743,6 +2027,81 @@
 
             requestAnimationFrame(gameLoop);
         }
+
+        // Initialize name input element
+        const playerNameInput = document.getElementById('playerNameInput');
+
+        // Handle name input changes
+        playerNameInput.addEventListener('input', (e) => {
+            playerNameForScore = e.target.value.slice(0, 20);
+        });
+
+        // Handle canvas clicks for death screen interactions
+        canvas.addEventListener('click', async (e) => {
+            if (gameState !== GAME_STATE.DEAD) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // Check if name input field was clicked
+            if (nameInputRect.x && x >= nameInputRect.x && x <= nameInputRect.x + nameInputRect.w &&
+                y >= nameInputRect.y && y <= nameInputRect.y + nameInputRect.h) {
+                // Position and show the hidden input
+                playerNameInput.style.left = (rect.left + nameInputRect.x) + 'px';
+                playerNameInput.style.top = (rect.top + nameInputRect.y) + 'px';
+                playerNameInput.style.width = nameInputRect.w + 'px';
+                playerNameInput.style.height = nameInputRect.h + 'px';
+                playerNameInput.style.opacity = '0';
+                playerNameInput.value = playerNameForScore;
+                playerNameInput.focus();
+                playerNameInput.select();
+                return;
+            }
+
+            // Check if submit button was clicked
+            if (submitButtonRect.x && x >= submitButtonRect.x && x <= submitButtonRect.x + submitButtonRect.w &&
+                y >= submitButtonRect.y && y <= submitButtonRect.y + submitButtonRect.h &&
+                playerNameForScore.length > 0) {
+                deathScreenPhase = 'submitted';
+                await submitScore(playerNameForScore);
+                playerNameInput.blur();
+            }
+        });
+
+        // Handle touch for name input
+        canvas.addEventListener('touchstart', async (e) => {
+            if (gameState !== GAME_STATE.DEAD) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+
+            if (nameInputRect.x && x >= nameInputRect.x && x <= nameInputRect.x + nameInputRect.w &&
+                y >= nameInputRect.y && y <= nameInputRect.y + nameInputRect.h) {
+                playerNameInput.style.left = (rect.left + nameInputRect.x) + 'px';
+                playerNameInput.style.top = (rect.top + nameInputRect.y) + 'px';
+                playerNameInput.style.width = nameInputRect.w + 'px';
+                playerNameInput.style.height = nameInputRect.h + 'px';
+                playerNameInput.style.opacity = '0';
+                playerNameInput.value = playerNameForScore;
+                playerNameInput.focus();
+                playerNameInput.select();
+                return;
+            }
+
+            if (submitButtonRect.x && x >= submitButtonRect.x && x <= submitButtonRect.x + submitButtonRect.w &&
+                y >= submitButtonRect.y && y <= submitButtonRect.y + submitButtonRect.h &&
+                playerNameForScore.length > 0) {
+                deathScreenPhase = 'submitted';
+                await submitScore(playerNameForScore);
+                playerNameInput.blur();
+            }
+        });
+
+        // Fetch leaderboard on page load
+        fetchLeaderboard();
 
         // Start the game
         gameLoop();
