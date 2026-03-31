@@ -253,7 +253,9 @@
         // Menu animation
         let menuTime = 0;
         let menuView = 'main'; // 'main' or 'leaderboard'
+        let deathView = 'main'; // 'main' or 'leaderboard'
         let leaderboardButtonRect = { x: 0, y: 0, w: 0, h: 0 };
+        let deathLeaderboardButtonRect = { x: 0, y: 0, w: 0, h: 0 };
         let backButtonRect = { x: 0, y: 0, w: 0, h: 0 };
 
         // Input handling
@@ -327,6 +329,7 @@
         function handleInput() {
             // Don't set inputActive when viewing leaderboard overlay
             if (gameState === GAME_STATE.MENU && menuView === 'leaderboard') return;
+            if (gameState === GAME_STATE.DEAD && deathView === 'leaderboard') return;
             inputActive = true;
             if (gameState === GAME_STATE.PLAYING) {
                 tapCount++;
@@ -651,6 +654,8 @@
             deathZoneName = currentZone.name;
             isNewBest = depth > bestDepth;
             deathScreenPhase = 'stats';
+            deathView = 'main';
+            deathLeaderboardButtonRect = { x: 0, y: 0, w: 0, h: 0 };
             playerNameForScore = '';
             scoreSubmitted = false;
 
@@ -1612,9 +1617,9 @@
             ctx.fillText('Born to explore.', cx, line2Y + 22);
 
             // ── LEADERBOARD BUTTON ──
-            const lbBtnY = ch * 0.72;
+            const lbBtnY = ch * 0.80;
             const lbBtnW = cw * 0.55;
-            const lbBtnH = 36;
+            const lbBtnH = 34;
             const lbBtnX = cx - lbBtnW / 2;
 
             ctx.fillStyle = 'rgba(200, 164, 74, 0.12)';
@@ -1627,11 +1632,11 @@
 
             ctx.fillStyle = '#C8A44A';
             ctx.font = '700 ' + Math.floor(cw * 0.032) + 'px Cinzel, "Times New Roman", serif';
-            ctx.fillText('VIEW LEADERBOARD', cx, lbBtnY + 24);
+            ctx.fillText('VIEW LEADERBOARD', cx, lbBtnY + 23);
             leaderboardButtonRect = { x: lbBtnX, y: lbBtnY, w: lbBtnW, h: lbBtnH };
 
             // ── TAP TO START ──
-            const startY = ch * 0.88;
+            const startY = ch * 0.90;
             ctx.font = '700 ' + Math.floor(cw * 0.04) + 'px Cinzel, "Times New Roman", serif';
             const blinkAlpha = (Math.sin(menuTime * 3) + 1) / 2;
             ctx.globalAlpha = blinkAlpha * 0.6 + 0.4;
@@ -1641,9 +1646,9 @@
 
             // ── BEST SCORE (subtle, bottom) ──
             if (bestDepth > 0) {
-                ctx.font = Math.floor(cw * 0.032) + 'px "Times New Roman", Georgia, serif';
+                ctx.font = Math.floor(cw * 0.028) + 'px "Times New Roman", Georgia, serif';
                 ctx.fillStyle = 'rgba(180, 170, 150, 0.4)';
-                ctx.fillText('Best Depth: ' + Math.floor(bestDepth), cx, ch - 20);
+                ctx.fillText('Best Depth: ' + Math.floor(bestDepth), cx, ch - 12);
             }
         }
 
@@ -1944,8 +1949,28 @@
                     }
                 }
 
-                // Tap to retry (only after submitted or after 5 seconds skip)
+                // View Leaderboard + Tap to retry (only after submitted)
                 if (!deathInputLocked && (deathScreenPhase === 'submitted' || scoreSubmitted)) {
+                    // View Leaderboard button
+                    const dlbBtnY2 = canvas.height * 0.82;
+                    const dlbBtnW2 = canvas.width * 0.55;
+                    const dlbBtnH2 = 30;
+                    const dlbBtnX2 = cx - dlbBtnW2 / 2;
+
+                    ctx.globalAlpha = contentAlpha;
+                    ctx.fillStyle = 'rgba(200, 164, 74, 0.12)';
+                    roundRect(ctx, dlbBtnX2, dlbBtnY2, dlbBtnW2, dlbBtnH2, 8);
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(200, 164, 74, 0.4)';
+                    ctx.lineWidth = 1;
+                    roundRect(ctx, dlbBtnX2, dlbBtnY2, dlbBtnW2, dlbBtnH2, 8);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#C8A44A';
+                    ctx.font = 'bold 12px Arial';
+                    ctx.fillText('VIEW LEADERBOARD', cx, dlbBtnY2 + 20);
+                    deathLeaderboardButtonRect = { x: dlbBtnX2, y: dlbBtnY2, w: dlbBtnW2, h: dlbBtnH2 };
+
                     ctx.fillStyle = '#FFFFFF';
                     ctx.font = '16px Arial';
                     const retryAlpha2 = (Math.sin(elapsed * 3) + 1) / 2;
@@ -2108,14 +2133,40 @@
                     }
                 }
 
-                // Tap to retry
+                // Tap to retry + view leaderboard
                 if (!deathInputLocked && deathScreenPhase === 'submitted') {
+                    // View Leaderboard button
+                    const dlbBtnY = canvas.height * 0.82;
+                    const dlbBtnW = canvas.width * 0.55;
+                    const dlbBtnH = 30;
+                    const dlbBtnX = cx - dlbBtnW / 2;
+
+                    ctx.globalAlpha = contentAlpha;
+                    ctx.fillStyle = 'rgba(200, 164, 74, 0.12)';
+                    roundRect(ctx, dlbBtnX, dlbBtnY, dlbBtnW, dlbBtnH, 8);
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(200, 164, 74, 0.4)';
+                    ctx.lineWidth = 1;
+                    roundRect(ctx, dlbBtnX, dlbBtnY, dlbBtnW, dlbBtnH, 8);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#C8A44A';
+                    ctx.font = 'bold 12px Arial';
+                    ctx.fillText('VIEW LEADERBOARD', cx, dlbBtnY + 20);
+                    deathLeaderboardButtonRect = { x: dlbBtnX, y: dlbBtnY, w: dlbBtnW, h: dlbBtnH };
+
                     ctx.fillStyle = '#FFFFFF';
                     ctx.font = '16px Arial';
                     const retryAlpha3 = (Math.sin(elapsed * 3) + 1) / 2;
                     ctx.globalAlpha = contentAlpha * (retryAlpha3 * 0.6 + 0.4);
-                    ctx.fillText('TAP TO PLAY AGAIN', cx, canvas.height * 0.88);
+                    ctx.fillText('TAP TO PLAY AGAIN', cx, canvas.height * 0.92);
                 }
+            }
+
+            // Death leaderboard overlay
+            if (deathView === 'leaderboard') {
+                ctx.globalAlpha = 1;
+                drawLeaderboardView();
             }
 
             ctx.globalAlpha = 1;
@@ -2190,6 +2241,29 @@
                     x >= backButtonRect.x && x <= backButtonRect.x + backButtonRect.w &&
                     y >= backButtonRect.y && y <= backButtonRect.y + backButtonRect.h) {
                     menuView = 'main';
+                    inputActive = false;
+                    return true;
+                }
+                return false;
+            }
+            // Death state: leaderboard and back buttons
+            if (gameState === GAME_STATE.DEAD) {
+                if (deathView === 'main' && deathLeaderboardButtonRect.x &&
+                    x >= deathLeaderboardButtonRect.x && x <= deathLeaderboardButtonRect.x + deathLeaderboardButtonRect.w &&
+                    y >= deathLeaderboardButtonRect.y && y <= deathLeaderboardButtonRect.y + deathLeaderboardButtonRect.h) {
+                    deathView = 'leaderboard';
+                    fetchLeaderboard();
+                    inputActive = false;
+                    return true;
+                }
+                if (deathView === 'leaderboard' && backButtonRect.x &&
+                    x >= backButtonRect.x && x <= backButtonRect.x + backButtonRect.w &&
+                    y >= backButtonRect.y && y <= backButtonRect.y + backButtonRect.h) {
+                    deathView = 'main';
+                    inputActive = false;
+                    return true;
+                }
+                if (deathView === 'leaderboard') {
                     inputActive = false;
                     return true;
                 }
