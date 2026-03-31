@@ -252,6 +252,9 @@
 
         // Menu animation
         let menuTime = 0;
+        let menuView = 'main'; // 'main' or 'leaderboard'
+        let leaderboardButtonRect = { x: 0, y: 0, w: 0, h: 0 };
+        let backButtonRect = { x: 0, y: 0, w: 0, h: 0 };
 
         // Input handling
         let inputActive = false;
@@ -322,6 +325,8 @@
         }
 
         function handleInput() {
+            // Don't set inputActive when viewing leaderboard overlay
+            if (gameState === GAME_STATE.MENU && menuView === 'leaderboard') return;
             inputActive = true;
             if (gameState === GAME_STATE.PLAYING) {
                 tapCount++;
@@ -1606,6 +1611,25 @@
             ctx.font = 'italic ' + Math.floor(cw * 0.035) + 'px "Times New Roman", Georgia, serif';
             ctx.fillText('Born to explore.', cx, line2Y + 22);
 
+            // ── LEADERBOARD BUTTON ──
+            const lbBtnY = ch * 0.72;
+            const lbBtnW = cw * 0.55;
+            const lbBtnH = 36;
+            const lbBtnX = cx - lbBtnW / 2;
+
+            ctx.fillStyle = 'rgba(200, 164, 74, 0.12)';
+            roundRect(ctx, lbBtnX, lbBtnY, lbBtnW, lbBtnH, 8);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(200, 164, 74, 0.4)';
+            ctx.lineWidth = 1;
+            roundRect(ctx, lbBtnX, lbBtnY, lbBtnW, lbBtnH, 8);
+            ctx.stroke();
+
+            ctx.fillStyle = '#C8A44A';
+            ctx.font = '700 ' + Math.floor(cw * 0.032) + 'px Cinzel, "Times New Roman", serif';
+            ctx.fillText('VIEW LEADERBOARD', cx, lbBtnY + 24);
+            leaderboardButtonRect = { x: lbBtnX, y: lbBtnY, w: lbBtnW, h: lbBtnH };
+
             // ── TAP TO START ──
             const startY = ch * 0.88;
             ctx.font = '700 ' + Math.floor(cw * 0.04) + 'px Cinzel, "Times New Roman", serif';
@@ -1615,26 +1639,118 @@
             ctx.fillText('TAP TO START', cx, startY);
             ctx.globalAlpha = 1;
 
-            // ── LEADERBOARD (top 10, bottom section) ──
-            if (leaderboardData.length > 0) {
-                const leaderboardY = ch * 0.7;
-                ctx.fillStyle = '#C8A44A';
-                ctx.font = 'bold ' + Math.floor(cw * 0.032) + 'px Cinzel, "Times New Roman", serif';
-                ctx.textAlign = 'center';
-                ctx.fillText('WORLDWIDE LEADERBOARD', cx, leaderboardY);
-
-                ctx.font = Math.floor(cw * 0.025) + 'px Arial';
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-                ctx.textAlign = 'center';
-                drawLeaderboard(cx - cw * 0.35, leaderboardY + 16, 10);
-            }
-
             // ── BEST SCORE (subtle, bottom) ──
             if (bestDepth > 0) {
                 ctx.font = Math.floor(cw * 0.032) + 'px "Times New Roman", Georgia, serif';
                 ctx.fillStyle = 'rgba(180, 170, 150, 0.4)';
                 ctx.fillText('Best Depth: ' + Math.floor(bestDepth), cx, ch - 20);
             }
+        }
+
+        function drawLeaderboardView() {
+            const cx = canvas.width / 2;
+            const cw = canvas.width;
+            const ch = canvas.height;
+
+            // Dark background
+            ctx.fillStyle = 'rgba(5, 5, 15, 0.95)';
+            ctx.fillRect(0, 0, cw, ch);
+
+            ctx.textAlign = 'center';
+
+            // Title
+            ctx.fillStyle = '#C8A44A';
+            ctx.font = '700 ' + Math.floor(cw * 0.05) + 'px Cinzel, "Times New Roman", serif';
+            ctx.fillText('LEADERBOARD', cx, ch * 0.08);
+
+            // Subtitle
+            ctx.fillStyle = 'rgba(200, 164, 74, 0.5)';
+            ctx.font = Math.floor(cw * 0.03) + 'px Arial';
+            ctx.fillText('WORLDWIDE TOP 50', cx, ch * 0.12);
+
+            // Decorative line
+            ctx.strokeStyle = 'rgba(200, 164, 74, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cx - cw * 0.35, ch * 0.14);
+            ctx.lineTo(cx + cw * 0.35, ch * 0.14);
+            ctx.stroke();
+
+            // Column headers
+            const headerY = ch * 0.17;
+            const leftX = cw * 0.08;
+            const nameX = cw * 0.18;
+            const depthX = cw * 0.72;
+            const zoneX = cw * 0.92;
+
+            ctx.fillStyle = 'rgba(200, 164, 74, 0.6)';
+            ctx.font = 'bold 10px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('#', leftX, headerY);
+            ctx.fillText('PLAYER', nameX, headerY);
+            ctx.textAlign = 'right';
+            ctx.fillText('DEPTH', depthX, headerY);
+            ctx.fillText('ZONE', zoneX, headerY);
+
+            // Entries
+            const entries = leaderboardData.slice(0, 50);
+            const startY = headerY + 20;
+            const rowH = Math.min(16, (ch * 0.72) / Math.max(entries.length, 1));
+
+            for (let i = 0; i < entries.length; i++) {
+                const entry = entries[i];
+                const y = startY + i * rowH;
+                const rank = i + 1;
+
+                // Highlight top 3
+                if (rank <= 3) {
+                    const medals = ['#FFD700', '#C0C0C0', '#CD7F32'];
+                    ctx.fillStyle = medals[rank - 1];
+                    ctx.font = 'bold 12px Arial';
+                } else {
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                    ctx.font = '11px Arial';
+                }
+
+                ctx.textAlign = 'left';
+                ctx.fillText(rank + '.', leftX, y);
+                const name = entry.player_name.length > 12 ? entry.player_name.slice(0, 11) + '...' : entry.player_name;
+                ctx.fillText(name, nameX, y);
+                ctx.textAlign = 'right';
+                ctx.fillText(Math.floor(entry.depth), depthX, y);
+                // Abbreviate zone name
+                const zoneShort = (entry.zone || '').split(' ').map(w => w[0]).join('');
+                ctx.font = '9px Arial';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+                ctx.fillText(zoneShort, zoneX, y);
+            }
+
+            if (entries.length === 0) {
+                ctx.textAlign = 'center';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.font = '14px Arial';
+                ctx.fillText('No scores yet. Be the first!', cx, ch * 0.4);
+            }
+
+            // Back button
+            const backBtnY = ch * 0.92;
+            const backBtnW = cw * 0.4;
+            const backBtnH = 34;
+            const backBtnX = cx - backBtnW / 2;
+
+            ctx.fillStyle = 'rgba(200, 164, 74, 0.12)';
+            roundRect(ctx, backBtnX, backBtnY, backBtnW, backBtnH, 8);
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(200, 164, 74, 0.4)';
+            ctx.lineWidth = 1;
+            roundRect(ctx, backBtnX, backBtnY, backBtnW, backBtnH, 8);
+            ctx.stroke();
+
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#C8A44A';
+            ctx.font = '700 ' + Math.floor(cw * 0.035) + 'px Cinzel, "Times New Roman", serif';
+            ctx.fillText('BACK', cx, backBtnY + 23);
+            backButtonRect = { x: backBtnX, y: backBtnY, w: backBtnW, h: backBtnH };
         }
 
         function drawDeath() {
@@ -1817,14 +1933,14 @@
                 // Post-submission on new best screen
                 if (deathScreenPhase === 'submitted' || scoreSubmitted) {
                     ctx.fillStyle = '#F5A623';
-                    ctx.font = 'bold 14px Arial';
+                    ctx.font = 'bold 16px Arial';
                     ctx.globalAlpha = contentAlpha;
                     const subY = prevBestY + 24;
-                    ctx.fillText('Score Submitted!', cx, subY);
+                    ctx.fillText('Thanks for submitting!', cx, subY);
                     if (playerRank > 0) {
                         ctx.fillStyle = '#FFFFFF';
-                        ctx.font = '13px Arial';
-                        ctx.fillText('Rank: #' + playerRank, cx, subY + 20);
+                        ctx.font = 'bold 14px Arial';
+                        ctx.fillText('You ranked #' + playerRank + ' worldwide', cx, subY + 22);
                     }
                 }
 
@@ -1945,29 +2061,47 @@
 
                 // Post-submission state
                 if (deathScreenPhase === 'submitted' || scoreSubmitted) {
+                    // Thanks message
                     ctx.fillStyle = '#F5A623';
-                    ctx.font = 'bold 18px Arial';
+                    ctx.font = 'bold 20px Arial';
                     ctx.globalAlpha = contentAlpha;
-                    ctx.fillText('Score Submitted!', cx, statY + 140);
+                    ctx.fillText('Thanks for submitting!', cx, statY + 120);
 
                     if (playerRank > 0) {
                         ctx.fillStyle = '#FFFFFF';
-                        ctx.font = '14px Arial';
-                        ctx.fillText('Rank: #' + playerRank, cx, statY + 165);
+                        ctx.font = 'bold 16px Arial';
+                        ctx.fillText('You ranked #' + playerRank + ' worldwide', cx, statY + 148);
                     }
 
                     // Show top 10 leaderboard
                     if (leaderboardData.length > 0) {
                         ctx.fillStyle = '#C8A44A';
                         ctx.font = 'bold 12px Arial';
-                        ctx.fillText('TOP 10 WORLDWIDE', cx, statY + 195);
+                        ctx.fillText('TOP 10 WORLDWIDE', cx, statY + 180);
+
+                        // Decorative line
+                        ctx.strokeStyle = 'rgba(200, 164, 74, 0.3)';
+                        ctx.lineWidth = 1;
+                        ctx.beginPath();
+                        ctx.moveTo(cx - canvas.width * 0.25, statY + 186);
+                        ctx.lineTo(cx + canvas.width * 0.25, statY + 186);
+                        ctx.stroke();
+
                         ctx.font = '11px Arial';
                         ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
                         ctx.textAlign = 'left';
                         const leaderboardStartX = cx - canvas.width * 0.3;
-                        const leaderboardStartY = statY + 210;
+                        const leaderboardStartY = statY + 200;
                         for (let i = 0; i < Math.min(10, leaderboardData.length); i++) {
                             const entry = leaderboardData[i];
+                            // Highlight the player's entry
+                            if (entry.player_name === playerNameForScore && Math.floor(entry.depth) === Math.floor(depth)) {
+                                ctx.fillStyle = '#F5A623';
+                                ctx.font = 'bold 11px Arial';
+                            } else {
+                                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+                                ctx.font = '11px Arial';
+                            }
                             ctx.fillText(`${i + 1}. ${entry.player_name} - ${Math.floor(entry.depth)}`, leaderboardStartX, leaderboardStartY + i * 16);
                         }
                         ctx.textAlign = 'center';
@@ -1999,8 +2133,12 @@
 
             if (gameState === GAME_STATE.MENU) {
                 drawBackground();
-                drawMenu();
-                if (inputActive) {
+                if (menuView === 'leaderboard') {
+                    drawLeaderboardView();
+                } else {
+                    drawMenu();
+                }
+                if (inputActive && menuView === 'main') {
                     startNewGame();
                     inputActive = false;
                 }
@@ -2036,18 +2174,43 @@
             playerNameForScore = e.target.value.slice(0, 20);
         });
 
-        // Handle canvas clicks for death screen interactions
-        canvas.addEventListener('click', async (e) => {
-            if (gameState !== GAME_STATE.DEAD) return;
+        // Shared click handler for buttons
+        function handleCanvasClick(x, y) {
+            // Menu state: leaderboard and back buttons
+            if (gameState === GAME_STATE.MENU) {
+                if (menuView === 'main' && leaderboardButtonRect.x &&
+                    x >= leaderboardButtonRect.x && x <= leaderboardButtonRect.x + leaderboardButtonRect.w &&
+                    y >= leaderboardButtonRect.y && y <= leaderboardButtonRect.y + leaderboardButtonRect.h) {
+                    menuView = 'leaderboard';
+                    fetchLeaderboard();
+                    inputActive = false;
+                    return true;
+                }
+                if (menuView === 'leaderboard' && backButtonRect.x &&
+                    x >= backButtonRect.x && x <= backButtonRect.x + backButtonRect.w &&
+                    y >= backButtonRect.y && y <= backButtonRect.y + backButtonRect.h) {
+                    menuView = 'main';
+                    inputActive = false;
+                    return true;
+                }
+                return false;
+            }
+            return false;
+        }
 
+        // Handle canvas clicks for menu and death screen interactions
+        canvas.addEventListener('click', async (e) => {
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
 
+            if (handleCanvasClick(x, y)) return;
+
+            if (gameState !== GAME_STATE.DEAD) return;
+
             // Check if name input field was clicked
             if (nameInputRect.x && x >= nameInputRect.x && x <= nameInputRect.x + nameInputRect.w &&
                 y >= nameInputRect.y && y <= nameInputRect.y + nameInputRect.h) {
-                // Position and show the hidden input
                 playerNameInput.style.left = (rect.left + nameInputRect.x) + 'px';
                 playerNameInput.style.top = (rect.top + nameInputRect.y) + 'px';
                 playerNameInput.style.width = nameInputRect.w + 'px';
@@ -2069,14 +2232,16 @@
             }
         });
 
-        // Handle touch for name input
+        // Handle touch for menu and death screen
         canvas.addEventListener('touchstart', async (e) => {
-            if (gameState !== GAME_STATE.DEAD) return;
-
             const rect = canvas.getBoundingClientRect();
             const touch = e.touches[0];
             const x = touch.clientX - rect.left;
             const y = touch.clientY - rect.top;
+
+            if (handleCanvasClick(x, y)) return;
+
+            if (gameState !== GAME_STATE.DEAD) return;
 
             if (nameInputRect.x && x >= nameInputRect.x && x <= nameInputRect.x + nameInputRect.w &&
                 y >= nameInputRect.y && y <= nameInputRect.y + nameInputRect.h) {
